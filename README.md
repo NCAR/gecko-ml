@@ -1,5 +1,13 @@
 # gecko-ml: Gecko Machine Learning Emulator
 
-This is the repo for gecko.
+The gecko-ml package provides a framework for building machine learning
+emulators of the GECKO-A chemistry model.
 
-jfdklsajd
+## Contributors
+David John Gagne
+Keely Lawrence
+Siyuan Wang
+
+## Requirements
+
+## Setup
