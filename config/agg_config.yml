@@ -2,8 +2,9 @@ species: 'dodecane'
 dir_path: '/glade/p/cisl/aiml/gecko/ML2019_dodecane_postproc/'
 summary_file: 'C02000_Exp_List_ML2019_dodecane_v1_LatinHyperCube.csv'
 aggregate_bins: True
-save_fortran: False
-output_path: '~/'
+save_models: True
+scaler_type: "StandardScaler"
+output_path: '/glade/u/home/cbecker/gecko-ml/'
 bin_prefix: ['Gas [ug/m3]', 'Aerosol [ug_m3]']
 min_exp: 0
 max_exp: 1999
@@ -23,3 +24,25 @@ output_vars: [
     'Gas [ug/m3]',
     'Aerosol [ug_m3]',
     'id']
+model_configurations:
+  dnn_1:
+    hidden_layers: 1
+    hidden_neurons: 4
+    activation: "relu"
+    output_activation: "linear"
+    optimizer: "adam"
+    loss: "mse"
+    lr: 0.001
+    batch_size: 128 
+    use_noise: False
+    noise_sd: 0.01
+    epochs: 2
+    use_dropout: False
+    dropout_alpha: 0.1
+    l2_weight: 0.01
+    sgd_momentum: 0.9
+    adam_beta_1: 0.9
+    adam_beta_2: 0.999
+    decay: 0
+    verbose:  0
+    classifier: False
