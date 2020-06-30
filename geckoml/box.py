@@ -4,9 +4,7 @@ from tensorflow.keras.models import Model, load_model
 
 class GeckoBoxEmulator(object):
     
-    def __init__(self, neural_net_path='/glade/u/home/cbecker/gecko-ml/dnn_1.h5',
-                 input_scaler_path='/glade/u/home/cbecker/gecko-ml/dodecane_X.scaler',
-                 output_scaler_path='/glade/u/home/cbecker/gecko-ml/dodecane_Y.scaler'):
+    def __init__(self, neural_net_path, input_scaler_path, output_scaler_path):
         
         self.neural_net_path = neural_net_path
         self.input_scaler_path = input_scaler_path
