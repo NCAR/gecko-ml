@@ -25,7 +25,10 @@ def main():
     input_vars = config['input_vars']
     output_vars = config['output_vars']
     output_path = config['output_path']
-
+    x_scaler = output_path + config['x_scaler']
+    y_scaler = output_path + config['y_scaler']
+    nnet = output_path + config['nnet']
+    
     exp_num = 299
     start_timestep = 0
     total_timesteps = 1439
@@ -33,15 +36,14 @@ def main():
     # single experiment example 
     # We will want to run multiple GECKO experiments in parallel
     
-    starting_conditions = get_starting_conds(dir_path, summary_file, bin_prefix, input_vars, output_vars,
-                           aggregate_bins, species, exp_num, start_timestep)
+    starting_conditions = get_starting_conds(dir_path, summary_file, bin_prefix, input_vars,
+                    output_vars, aggregate_bins, species, exp_num, start_timestep)
 
-    mod = GeckoBoxEmulator()
+    mod = GeckoBoxEmulator(neural_net_path=nnet, input_scaler_path=x_scaler, output_scaler_path=y_scaler)
     box_preds = mod.predict(starting_conditions, total_timesteps)
     
     print('Completed in {0:0.1f} seconds'.format(time.time() - start))
-    
-    # Add Verification/Analysis and output
+    print(box_preds.shape)
     
     return
 
