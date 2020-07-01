@@ -130,13 +130,13 @@ def extract_inputs_outputs(exp_data_merged, input_exp_cols, output_exp_cols):
     output_data = pd.concat(output_data_list, ignore_index=True)
     return input_data, output_data
 
-def get_data_serial(file_path, summary_file, bin_prefix, input_vars, output_vars, aggregate_bins):
+def get_data_serial(file_path, summary_data, bin_prefix, input_vars, output_vars, aggregate_bins):
     """
         Load an experiment file based on a summary file; combine data from summary into experiment file
     
     Args:
         file_path: Experiment file to load
-        summary_file: Full path of the summary file 
+        summary_data: Summary dataframe
         bin_prefix: Prefix of compound volitility bins if aggregation is used
         input_vars: List of varibles to subset for input
         ouput_vars: List of varibles to subset for ouput
@@ -150,11 +150,13 @@ def get_data_serial(file_path, summary_file, bin_prefix, input_vars, output_vars
     
     df = pd.read_csv(file_path)
     df.columns = [x.strip() for x in df.columns]
+    summary_data.columns = [x.strip() for x in summary_data.columns]
+    
     exp_num = int(re.findall("_Exp(\d+).csv", file_path)[0])
     
-    for variable in summary_file.columns:
+    for variable in summary_data.columns:
         
-        df[variable] = summary_file[summary_file['id'] == 
+        df[variable] = summary_data[summary_data['id'] == 
                                     'Exp{}'.format(exp_num)][variable][exp_num]
     if aggregate_bins: 
         
@@ -235,6 +237,32 @@ def split_data(input_data, output_data, n_splits=2, random_state=8):
 
     return in_train, out_train, in_val, out_val, in_test, out_test
 
+def get_starting_conds(dir_path, summary_file, bin_prefix, input_vars, output_vars,
+                       aggregate_bins, species, exp_num, starting_ts=0):
+    """
+    Get starting conditions for Box emulator.
+    Args:
+        dir_path: Base directory of experiment/summary data
+        summary_file: Full path of the summary file 
+        bin_prefix: Prefix of compound volitility bins if aggregation is used
+        input_vars: List of varibles to subset for input
+        ouput_vars: List of varibles to subset for ouput
+        aggregate_bins: Boolean to aggregate bins
+        species: Which molecular species
+        exp_num: Which experiment the box model will be run on
+        starting_ts: Starting timestep to use for box emulator
+    Returns:
+        ts_data: Timestep data to be used as initial input to box emulator (np.array)
+        
+    """
+    
+    file_name = '{}ML2019_{}_ML2019_Exp{}.csv'.format(dir_path, species, exp_num)
+    summary = pd.read_csv(dir_path+summary_file, skiprows=3) 
+    exp_data = get_data_serial(file_name, summary, bin_prefix, input_vars, output_vars, aggregate_bins)[0]
+    
+    ts_data = exp_data.iloc[starting_ts:starting_ts+1, :-1].values
+
+    return ts_data
 
 def repopulate_scaler(scale_data, scaler_type="MinMaxScaler"):
     """
