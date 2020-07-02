@@ -14,75 +14,6 @@ scalers = {"MinMaxScaler": MinMaxScaler,
            "StandardScaler": StandardScaler,
            "RobustScaler": RobustScaler}
 
-input_exp_cols_default = ['Precursor [ug/m3]',
-    'Gas [ug/m3] Bin01: lg(C*) = -5.5',
-    'Gas [ug/m3] Bin02: lg(C*) = -4.5',
-    'Gas [ug/m3] Bin03: lg(C*) = -3.5',
-    'Gas [ug/m3] Bin04: lg(C*) = -2.5',
-    'Gas [ug/m3] Bin05: lg(C*) = -1.5',
-    'Gas [ug/m3] Bin06: lg(C*) = -0.5',
-    'Gas [ug/m3] Bin07: lg(C*) =  0.5',
-    'Gas [ug/m3] Bin08: lg(C*) =  1.5',
-    'Gas [ug/m3] Bin09: lg(C*) =  2.5',
-    'Gas [ug/m3] Bin10: lg(C*) =  3.5',
-    'Gas [ug/m3] Bin11: lg(C*) =  4.5',
-    'Gas [ug/m3] Bin12: lg(C*) =  5.5',
-    'Gas [ug/m3] Bin13: lg(C*) =  6.5',
-    'Gas [ug/m3] Bin14: lg(C*) = -6.5',
-    'Aerosol [ug_m3] Bin01: lg(C*) = -5.5',
-    'Aerosol [ug_m3] Bin02: lg(C*) = -4.5',
-    'Aerosol [ug_m3] Bin03: lg(C*) = -3.5',
-    'Aerosol [ug_m3] Bin04: lg(C*) = -2.5',
-    'Aerosol [ug_m3] Bin05: lg(C*) = -1.5',
-    'Aerosol [ug_m3] Bin06: lg(C*) = -0.5',
-    'Aerosol [ug_m3] Bin07: lg(C*) =  0.5',
-    'Aerosol [ug_m3] Bin08: lg(C*) =  1.5',
-    'Aerosol [ug_m3] Bin09: lg(C*) =  2.5',
-    'Aerosol [ug_m3] Bin10: lg(C*) =  3.5',
-    'Aerosol [ug_m3] Bin11: lg(C*) =  4.5',
-    'Aerosol [ug_m3] Bin12: lg(C*) =  5.5',
-    'Aerosol [ug_m3] Bin13: lg(C*) =  6.5',
-    'Aerosol [ug_m3] Bin14: lg(C*) = -6.5',
-    'temperature (K)',
-    'solar zenith angle (degree)',
-    'pre-existing aerosols (ug/m3)',
-    'o3 (ppb)',
-    'nox (ppb)',
-    'oh (10^6 molec/cm3)',
-    "idnum"]
-
-output_exp_cols_default = ['Precursor [ug/m3]',
-    'Gas [ug/m3] Bin01: lg(C*) = -5.5',
-    'Gas [ug/m3] Bin02: lg(C*) = -4.5',
-    'Gas [ug/m3] Bin03: lg(C*) = -3.5',
-    'Gas [ug/m3] Bin04: lg(C*) = -2.5',
-    'Gas [ug/m3] Bin05: lg(C*) = -1.5',
-    'Gas [ug/m3] Bin06: lg(C*) = -0.5',
-    'Gas [ug/m3] Bin07: lg(C*) =  0.5',
-    'Gas [ug/m3] Bin08: lg(C*) =  1.5',
-    'Gas [ug/m3] Bin09: lg(C*) =  2.5',
-    'Gas [ug/m3] Bin10: lg(C*) =  3.5',
-    'Gas [ug/m3] Bin11: lg(C*) =  4.5',
-    'Gas [ug/m3] Bin12: lg(C*) =  5.5',
-    'Gas [ug/m3] Bin13: lg(C*) =  6.5',
-    'Gas [ug/m3] Bin14: lg(C*) = -6.5',
-    'Aerosol [ug_m3] Bin01: lg(C*) = -5.5',
-    'Aerosol [ug_m3] Bin02: lg(C*) = -4.5',
-    'Aerosol [ug_m3] Bin03: lg(C*) = -3.5',
-    'Aerosol [ug_m3] Bin04: lg(C*) = -2.5',
-    'Aerosol [ug_m3] Bin05: lg(C*) = -1.5',
-    'Aerosol [ug_m3] Bin06: lg(C*) = -0.5',
-    'Aerosol [ug_m3] Bin07: lg(C*) =  0.5',
-    'Aerosol [ug_m3] Bin08: lg(C*) =  1.5',
-    'Aerosol [ug_m3] Bin09: lg(C*) =  2.5',
-    'Aerosol [ug_m3] Bin10: lg(C*) =  3.5',
-    'Aerosol [ug_m3] Bin11: lg(C*) =  4.5',
-    'Aerosol [ug_m3] Bin12: lg(C*) =  5.5',
-    'Aerosol [ug_m3] Bin13: lg(C*) =  6.5',
-    'Aerosol [ug_m3] Bin14: lg(C*) = -6.5',
-    "idnum", 'timestep']
-
-
 def load_data(path, summary_file, species="toluene_kOH", delimiter=", ", experiment="ML2019"):
     """
     Load a set of experiment files based on a summary file.
@@ -111,24 +42,17 @@ def load_data(path, summary_file, species="toluene_kOH", delimiter=", ", experim
     exp_data_combined.columns = exp_data_combined.columns.str.strip()
     exp_data_merged = pd.merge(exp_data_combined, summary_data, left_on="idnum", right_on="idnum")
     return exp_data_merged, summary_data
-  
-#exp_data_merged, summary_data = load_data("/glade/work/dgagne/Batch1_toluene",
-#                                          "GAR0084_Exp_List_TEXT_PreCompile_BatchSubmit_v0.csv")
 
+def load_combined_data(output_path, species):
 
-def extract_inputs_outputs(exp_data_merged, input_exp_cols, output_exp_cols):
-    input_data_list = []
-    output_data_list = []
-    for exp in np.unique(exp_data_merged.idnum):
-        if exp % 100 == 0:
-            print(exp)
-        input_data_list.append(
-            exp_data_merged.loc[exp_data_merged.idnum == exp, input_exp_cols].reset_index(drop=True).iloc[:-1])
-        output_data_list.append(
-            exp_data_merged.loc[exp_data_merged.idnum == exp, output_exp_cols].reset_index(drop=True).iloc[1:])
-    input_data = pd.concat(input_data_list, ignore_index=True)
-    output_data = pd.concat(output_data_list, ignore_index=True)
-    return input_data, output_data
+    in_train = pd.read_parquet('{}in_train_{}.parquet'.format(output_path, species))
+    out_train = pd.read_parquet('{}out_train_{}.parquet'.format(output_path, species))
+    in_val = pd.read_parquet('{}in_val_{}.parquet'.format(output_path, species))
+    out_val = pd.read_parquet('{}out_val_{}.parquet'.format(output_path, species))
+    in_test = pd.read_parquet('{}in_test_{}.parquet'.format(output_path, species))
+    out_test = pd.read_parquet('{}out_test_{}.parquet'.format(output_path, species))
+
+    return in_train, out_train, in_val, out_val, in_test, out_test
 
 def get_data_serial(file_path, summary_file, bin_prefix, input_vars, output_vars, aggregate_bins):
     """
@@ -235,18 +159,8 @@ def split_data(input_data, output_data, n_splits=2, random_state=8):
 
     return in_train, out_train, in_val, out_val, in_test, out_test
 
+def get_starting_conds(data, exp, seq_len=1, starting_ts=0):
+    """  """
+    starting_conditions = data[data['id'] == exp].iloc[starting_ts:starting_ts+seq_len,:]
 
-def repopulate_scaler(scale_data, scaler_type="MinMaxScaler"):
-    """
-    Given a csv file containing scaling values, repopulate a scikit-learn
-    scaling object with those same values.
-    Args:
-        scale_file (str): path to csv file containing scale values
-        scaler_type (str):
-    Returns:
-        scaler_obj: Scaler Object with normalizing values specified.
-    """
-    scaler_obj = scalers[scaler_type]()
-    for column in scale_data.columns[1:]:
-        setattr(scaler_obj, column + "_", scale_data[column].values)
-    return scaler_obj
+    return starting_conditions
