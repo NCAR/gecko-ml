@@ -41,14 +41,9 @@ def main():
     val_out = pd.read_parquet('{}out_val_{}.parquet'.format(output_path, species))
 
     starting_conditions = get_starting_conds(data=val_in, exp=exp)
-    print(starting_conditions.shape)
-    output_scaler = joblib.load(x_scaler)
-    scaled_sc = output_scaler.transform(starting_conditions.iloc[:,1:-1])
 
-
-
-    mod = GeckoBoxEmulator(neural_net_path=nnet, output_scaler_path=y_scaler)
-    box_preds = mod.predict(scaled_sc, total_timesteps)
+    mod = GeckoBoxEmulator(neural_net_path=nnet, input_scaler_path=x_scaler, output_scaler_path=y_scaler)
+    box_preds = mod.predict(starting_conditions, total_timesteps)
 
     print('Completed in {0:0.1f} seconds'.format(time.time() - start))
     print(box_preds.shape)
