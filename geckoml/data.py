@@ -159,8 +159,3 @@ def split_data(input_data, output_data, n_splits=2, random_state=8):
 
     return in_train, out_train, in_val, out_val, in_test, out_test
 
-def get_starting_conds(data, exp, seq_len=1, starting_ts=0):
-    """  """
-    starting_conditions = data[data['id'] == exp].iloc[starting_ts:starting_ts+seq_len,:]
-
-    return starting_conditions

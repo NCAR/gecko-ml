@@ -1,7 +1,9 @@
 import joblib
+import pandas as pd
 import numpy as np
-from tensorflow.keras.models import Model, load_model
-
+import tensorflow as tf
+from tensorflow.keras.models import load_model
+from dask.distributed import Client, LocalCluster
 
 class GeckoBoxEmulator(object):
 
@@ -13,32 +15,38 @@ class GeckoBoxEmulator(object):
 
         return
 
-    def run_ensemble(self, data, num_exps, num_exps='all'):
-        """ if num_exps == 'all' then... """
+    def run_ensemble(self, data, num_timesteps, num_exps='all'):
+        """ """
         exps = data['id'].unique()
-
         if num_exps != 'all':
-
             exps = np.random.choice(exps, num_exps, replace=False)
 
+        starting_conds = []
+        time_series = data[data['id'] == exps[0]].iloc[1:num_timesteps+1, 0].reset_index(drop=True)
+        print(time_series)
         for x in exps:
-
             sc = self.get_starting_conds(data, x)
-            num_timesteps = len(data)
-            pred = self.predict(sc, num_timesteps)
+            starting_conds.append(sc)
 
-            # append preds/results of each experimetn
+        cluster = LocalCluster()
+        client = Client(cluster)
+        print(cluster)
+        futures = client.map(self.predict, starting_conds, [num_timesteps]*len(exps), [time_series]*len(exps))
+        results = client.gather(futures)
+        results_df = pd.concat(results)
+        client.shutdown()
 
-        return result_df
+        return results_df
 
-    def predict(self, input_concentrations, num_timesteps, starting_ts=0, seq_length=1):
-
+    def predict(self, starting_conds, num_timesteps, time_series, starting_ts=0, seq_length=1):
+        tf.keras.backend.clear_session()
         input_scaler = joblib.load(self.input_scaler_path)
         output_scaler = joblib.load(self.output_scaler_path)
         mod = load_model(self.neural_net_path)
 
-        scaled_input = input_scaler.transform(input_concentrations.iloc[starting_ts:seq_length,1:-1])
+        scaled_input = input_scaler.transform(starting_conds.iloc[starting_ts:seq_length,1:-1])
         static_input = scaled_input[:, -6:]
+        exp = starting_conds['id'].values[0]
 
         for i in range(num_timesteps):
 
@@ -54,7 +62,11 @@ class GeckoBoxEmulator(object):
                 new_input = np.concatenate([pred, static_input], axis=1)
                 pred_array = np.concatenate([pred_array, pred], axis=0)
 
-        results = output_scaler.inverse_transform(pred_array)
+        results = pd.DataFrame(output_scaler.inverse_transform(pred_array))
+        results.columns = starting_conds.columns[1:4]
+        results['id'] = exp
+        results['Time [s]'] = time_series
+        results = results.reset_index(drop=True)
 
         return results
 
