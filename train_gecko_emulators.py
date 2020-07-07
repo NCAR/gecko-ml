@@ -2,7 +2,6 @@ from geckoml.models import DenseNeuralNetwork
 from geckoml.data import combine_data, split_data, load_combined_data
 from sklearn.preprocessing import StandardScaler, RobustScaler, MaxAbsScaler, MinMaxScaler
 from tensorflow.keras.models import Model, save_model
-import pandas as pd
 import time
 import joblib
 import argparse
@@ -75,6 +74,7 @@ def main():
         models[model_name] = DenseNeuralNetwork(**model_config)
         models[model_name].fit(scaled_in_train, scaled_out_train)
 
+
     # Calculate validation and testing scores
     
     # Save ML models, scaling values, and verification data to disk
@@ -82,8 +82,8 @@ def main():
 
         for model_name in config["model_configurations"].keys():
             models[model_name].save_fortran_model(output_path + model_name + ".nc")
-            save_model(models[model_name].model, output_path + model_name + ".h5")
-            
+            models[model_name].model.save(output_path + model_name)
+
         joblib.dump(X_scaler, '{}{}_X.scaler'.format(output_path, species))
         joblib.dump(Y_scaler, '{}{}_Y.scaler'.format(output_path, species))
     

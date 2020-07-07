@@ -1,6 +1,7 @@
 import joblib
 import pandas as pd
 import numpy as np
+import gc
 import tensorflow as tf
 from tensorflow.keras.models import load_model
 from dask.distributed import Client, LocalCluster
@@ -23,7 +24,6 @@ class GeckoBoxEmulator(object):
 
         starting_conds = []
         time_series = data[data['id'] == exps[0]].iloc[1:num_timesteps+1, 0].reset_index(drop=True)
-        print(time_series)
         for x in exps:
             sc = self.get_starting_conds(data, x)
             starting_conds.append(sc)
@@ -40,6 +40,7 @@ class GeckoBoxEmulator(object):
 
     def predict(self, starting_conds, num_timesteps, time_series, starting_ts=0, seq_length=1):
         tf.keras.backend.clear_session()
+        gc.collect()
         input_scaler = joblib.load(self.input_scaler_path)
         output_scaler = joblib.load(self.output_scaler_path)
         mod = load_model(self.neural_net_path)
@@ -84,4 +85,7 @@ class GeckoBoxEmulator(object):
 
     def transform_output(self, predictions):
         return
+
+
+
 

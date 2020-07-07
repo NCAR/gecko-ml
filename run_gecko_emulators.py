@@ -3,8 +3,11 @@ import pandas as pd
 import yaml
 import time
 from geckoml.box import GeckoBoxEmulator
+import matplotlib.pyplot as plt
+from geckoml.metrics import ensembled_box_metrics, mae_time_series, match_true_exps
 
 start = time.time()
+
 
 def main():
     # read YAML config as provided arg
@@ -14,30 +17,36 @@ def main():
     with open(args.config) as config_file:
         config = yaml.load(config_file)
 
-    # Extract config arguments and validate if necessary
+    # Extract config arguments
     species = config['species']
     output_path = config['output_path']
     x_scaler = output_path + config['x_scaler']
     y_scaler = output_path + config['y_scaler']
     nnet = output_path + config['nnet']
-
-    # We will want to run multiple GECKO experiments in parallel
+    time_steps = config['time_steps']
+    num_exps = config['num_exps']
 
     val_in = pd.read_parquet('{}in_val_{}.parquet'.format(output_path, species))
     val_out = pd.read_parquet('{}out_val_{}.parquet'.format(output_path, species))
 
+    # Run multiple GECKO experiments in parallel
     mod = GeckoBoxEmulator(neural_net_path=nnet, input_scaler_path=x_scaler, output_scaler_path=y_scaler)
-    d = mod.run_ensemble(val_in, 100, 7)
-    print(d.columns)
-    d.to_csv(output_path+'test_output.csv', index=False)
+    box_preds = mod.run_ensemble(data=val_in, num_timesteps=time_steps, num_exps=num_exps)
+
+    y_true, y_preds = match_true_exps(truth=val_out, preds=box_preds, num_timesteps=time_steps)
+
+    hd, rmse = ensembled_box_metrics(y_true, y_preds)
+    print('Hellenger Distance: {}'.format(hd))
+    print('RMSE: {}'.format(rmse))
+
+    mae = mae_time_series(y_true, y_preds)
+    ax = mae.plot()
+    ax.set_title('MAE per Timestep')
+    fig = ax.get_figure()
+    fig.savefig('{}{}mae_timeseries.png'.format(output_path, species), bbox_inches='tight')
+
     print('Completed in {0:0.1f} seconds'.format(time.time() - start))
-
     return
-
-    # We will want to run multiple GECKO experiments in parallel
-
-    #client = Client()
-    #lient.map()
 
 
 if __name__ == "__main__":
