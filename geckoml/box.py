@@ -87,6 +87,3 @@ class GeckoBoxEmulator(object):
     def transform_output(self, predictions):
         return
 
-
-
-

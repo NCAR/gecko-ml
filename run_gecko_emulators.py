@@ -15,14 +15,15 @@ start = time.time()
 
 
 def main():
+
     # read YAML config as provided arg
     parser = argparse.ArgumentParser()
     parser.add_argument("-c", "--config", default="agg_config.yml", help="Path to config file")
     args = parser.parse_args()
     with open(args.config) as config_file:
         config = yaml.load(config_file)
-
-    # Extract config arguments
+    
+    # Extract config arguments and validate if necessary
     species = config['species']
     output_path = config['output_path']
     x_scaler = output_path + config['x_scaler']
