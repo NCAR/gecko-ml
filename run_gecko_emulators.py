@@ -2,8 +2,14 @@ import argparse
 import pandas as pd
 import yaml
 import time
+import tensorflow as tf
 from geckoml.box import GeckoBoxEmulator
 from geckoml.metrics import ensembled_box_metrics, mae_time_series, match_true_exps
+
+gpus  = tf.config.experimental.list_physical_devices('GPU')
+for device in gpus:
+    print(device)
+    tf.config.experimental.set_memory_growth(device, True)
 
 start = time.time()
 
