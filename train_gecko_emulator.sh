@@ -2,7 +2,7 @@
 #SBATCH --job-name=gecko-ml
 #SBATCH --account=NAML0001
 #SBATCH --cpus-per-task=1
-#SBATCH --time=00:10:00
+#SBATCH --time=00:20:00
 #SBATCH --partition=dav
 #SBATCH --gres=gpu:v100:1
 #SBATCH --mem=128G
@@ -10,5 +10,5 @@
 #SBATCH -e gecko_ml.out
 module load ncarenv/1.3 gnu/8.3.0 openmpi/3.1.4 python/3.7.5 cuda/10.1
 ncar_pylib ncar_20191211
-cd ~/gecko-ml
-python -u train_gecko_emulators.py -c ./config/config_gas_aerosol.yml >& gecko.txt
+cd /glade/work/$USER/gecko-ml/
+python -u train_gecko_emulators.py -c ./config/agg_config.yml >& gecko.txt
