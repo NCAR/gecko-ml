@@ -15,7 +15,7 @@ bin_prefix: ['Gas [ug/m3]', 'Aerosol [ug_m3]']
 min_exp: 0
 max_exp: 1999
 time_steps: 1439
-num_exps: 20
+num_exps: 'all' # int or 'all'
 input_vars: [
     'Time [s]',
     'Precursor [ug/m3]',
@@ -36,8 +36,8 @@ output_vars: [
     'id']
 model_configurations:
   dnn_1:
-    hidden_layers: 1
-    hidden_neurons: 4
+    hidden_layers: 2
+    hidden_neurons: 25
     activation: "relu"
     output_activation: "linear"
     optimizer: "adam"

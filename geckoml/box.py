@@ -4,7 +4,7 @@ import numpy as np
 import gc
 import tensorflow as tf
 from tensorflow.keras.models import load_model
-from dask.distributed import Client, LocalCluster
+from dask.distributed import Client, LocalCluster, wait
 
 class GeckoBoxEmulator(object):
 
@@ -32,6 +32,7 @@ class GeckoBoxEmulator(object):
         client = Client(cluster)
         print(cluster)
         futures = client.map(self.predict, starting_conds, [num_timesteps]*len(exps), [time_series]*len(exps))
+        wait(futures)
         results = client.gather(futures)
         results_df = pd.concat(results)
         client.shutdown()
@@ -64,7 +65,7 @@ class GeckoBoxEmulator(object):
                 pred_array = np.concatenate([pred_array, pred], axis=0)
 
         results = pd.DataFrame(output_scaler.inverse_transform(pred_array))
-        results.columns = starting_conds.columns[1:4]
+        results.columns = starting_conds.columns[1:-7]
         results['id'] = exp
         results['Time [s]'] = time_series
         results = results.reset_index(drop=True)

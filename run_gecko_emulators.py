@@ -3,7 +3,6 @@ import pandas as pd
 import yaml
 import time
 from geckoml.box import GeckoBoxEmulator
-import matplotlib.pyplot as plt
 from geckoml.metrics import ensembled_box_metrics, mae_time_series, match_true_exps
 
 start = time.time()
@@ -25,6 +24,7 @@ def main():
     nnet = output_path + config['nnet']
     time_steps = config['time_steps']
     num_exps = config['num_exps']
+    output_cols = config["output_vars"]
 
     val_in = pd.read_parquet('{}in_val_{}.parquet'.format(output_path, species))
     val_out = pd.read_parquet('{}out_val_{}.parquet'.format(output_path, species))
@@ -39,7 +39,7 @@ def main():
     print('Hellenger Distance: {}'.format(hd))
     print('RMSE: {}'.format(rmse))
 
-    mae = mae_time_series(y_true, y_preds)
+    mae = mae_time_series(y_true, y_preds, output_cols)
     ax = mae.plot()
     ax.set_title('MAE per Timestep')
     fig = ax.get_figure()

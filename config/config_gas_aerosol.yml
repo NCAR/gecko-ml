@@ -4,14 +4,18 @@ summary_file: 'C02000_Exp_List_ML2019_dodecane_v1_LatinHyperCube.csv'
 aggregate_bins: False
 save_models: True
 save_data: True
-scaler_type: "MinMaxScaler"
+seq_data: False
+seq_length: 5
+scaler_type: "StandardScaler"
 output_path: '/Users/cbecker/PycharmProjects/gecko-ml/save_out/'
 x_scaler: 'dodecane_X.scaler'
 y_scaler: 'dodecane_Y.scaler'
-nnet: 'dnn_1.h5'
+nnet: 'dnn_1'
 bin_prefix: ['Gas [ug/m3]', 'Aerosol [ug_m3]']
 min_exp: 0
 max_exp: 1999
+time_steps: 1439
+num_exps: 3
 input_vars: 
     ['Time [s]',
     'Precursor [ug/m3]',
