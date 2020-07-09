@@ -7,7 +7,7 @@ save_data: True
 seq_data: False
 seq_length: 5
 scaler_type: "StandardScaler"
-output_path: '/glade/work/cbecker/gecko-ml/save_out/'
+output_path: '/glade/work/$USER/gecko-ml/save_out/'
 x_scaler: 'dodecane_X.scaler'
 y_scaler: 'dodecane_Y.scaler'
 nnet: 'dnn_1'
