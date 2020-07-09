@@ -82,11 +82,13 @@ def mae_time_series(y_true, y_pred):
         y_true (np.array): True output data
         y_pred (np.array): Predicted output data
     """
+    time_series = y_true['Time [s]']
     y_true = y_true.sort_values(['id', 'Time [s]'], ascending=True).iloc[:, 1:-1]
     y_pred = y_pred.sort_values(['id', 'Time [s]'], ascending=True).iloc[:, :-2]
 
     df_diff = np.abs(y_true - y_pred)
-    df_diff['Time [s]'] = y_true['Time [s]']
+
+    df_diff['Time [s]'] = time_series
     mae = df_diff.groupby('Time [s]').mean()
 
     return mae
