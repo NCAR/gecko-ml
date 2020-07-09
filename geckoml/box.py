@@ -4,7 +4,7 @@ import numpy as np
 import gc
 import tensorflow as tf
 from tensorflow.keras.models import load_model
-from dask.distributed import Client, LocalCluster, wait
+from dask.distributed import Client, LocalCluster
 
 
 class GeckoBoxEmulator(object):
@@ -50,7 +50,6 @@ class GeckoBoxEmulator(object):
         cluster = LocalCluster(processes=True, n_workers=72, threads_per_worker=1)
         client = Client(cluster)
         futures = client.map(self.predict, starting_conds, [num_timesteps]*len(exps), [time_series]*len(exps))
-        wait(futures)
         results = client.gather(futures)
         results_df = pd.concat(results)
         client.shutdown()
@@ -118,21 +117,24 @@ class GeckoBoxEmulator(object):
         starting_conditions = data[data['id'] == exp].iloc[starting_ts:starting_ts + seq_len, :]
         return starting_conditions
 
-    def scale_input(self, input_concentrations):
+    def scale_input(self, input_concentrations, seq_length=1, starting_ts=0, ):
         """
         Scale initial conditions for initial prediction of box emulator.
         Args:
             input_concentrations (DataFrame): DataFrame of initial conditions.
+            seq_length (int): Number of obs to use as initial conditions (> 1 for RNN/LSTM models) Defaults to 1.
+            starting_ts (int): First timestep to use for initial conditions.
         Returns:
             scaled_input (numpy array): scaled input array ready for predition.
             static_input (numpy array): scaled subset (env. conds) of input that remains static throughout emulation.
         """
 
         input_scaler = joblib.load(self.input_scaler_path)
-        scaled_input = input_scaler.transform(input_concentrations.iloc[starting_ts:seq_length,1:-1])
+        scaled_input = input_scaler.transform(input_concentrations.iloc[starting_ts:seq_length, 1:-1])
         static_input = scaled_input[:, -6:]
 
         return scaled_input, static_input
+
 
     def transform_output(self, predictions):
         return
