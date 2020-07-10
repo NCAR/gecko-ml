@@ -160,3 +160,47 @@ def split_data(input_data, output_data, n_splits=2, random_state=8):
     in_test, out_test = remain_in.iloc[test_indx], remain_out.iloc[test_indx]
 
     return in_train, out_train, in_val, out_val, in_test, out_test
+
+
+def reshape_data(x_data, y_data, seq_length):
+    """
+    Reshape matrix data into sample shape for LSTM training.
+
+    :param x_data: DataFrame containing input features (columns) and time steps (rows).
+    :param y_data: Matrix containing output features (columns) and time steps (rows).
+    :param seq_length: Length of look back time steps for one time step of prediction.
+
+    :return: Two np.ndarrays, the first of shape (samples, length of sequence,
+        number of features), containing the input data for the LSTM. The second
+        of shape (samples, number of output features) containing the expected output for each input
+        sample.
+    """
+    exps = x_data['id'].unique()
+    num_samples = x_data.shape[0]
+    num_features = len(x_data.columns[1:-1])
+    num_output = len(y_data.columns[1:-1])
+
+    xx = np.zeros((num_samples - (len(exps) * seq_length), seq_length, num_features))
+    yy = np.zeros((num_samples - (len(exps) * seq_length), num_output))
+
+    for n, exp in enumerate(exps):
+
+        x = x_data[x_data['id'] == exp].iloc[:, 1:-1].values
+        y = y_data[y_data['id'] == exp].iloc[:, 1:-1].values
+        n_exp_samps = x.shape[0] - seq_length
+
+        num_samples, num_features = x.shape
+        num_output = len(y_data.columns[1:-1])
+
+        x_new = np.zeros((num_samples - seq_length, seq_length, num_features))
+        y_new = np.zeros((num_samples - seq_length, num_output))
+
+        for i in range(0, x_new.shape[0]):
+            x_new[i, :, :num_features] = x[i:i + seq_length, :]
+            y_new[i, :] = y[i + seq_length, :]
+
+        print(x_new.shape)
+        xx[n * n_exp_samps:(n + 1) * n_exp_samps, :, :] = x_new
+        yy[n * n_exp_samps:(n + 1) * n_exp_samps, :] = y_new
+
+    return xx, yy

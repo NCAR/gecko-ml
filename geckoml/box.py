@@ -47,7 +47,7 @@ class GeckoBoxEmulator(object):
             sc = self.get_starting_conds(data, x)
             starting_conds.append(sc)
 
-        cluster = LocalCluster(processes=True, n_workers=72, threads_per_worker=1)
+        cluster = LocalCluster(processes=True)
         client = Client(cluster)
         futures = client.map(self.predict, starting_conds, [num_timesteps]*len(exps), [time_series]*len(exps))
         results = client.gather(futures)
