@@ -54,13 +54,13 @@ def load_combined_data(output_path, species):
 
     return in_train, out_train, in_val, out_val, in_test, out_test
 
-def get_data_serial(file_path, summary_file, bin_prefix, input_vars, output_vars, aggregate_bins):
+def get_data_serial(file_path, summary_data, bin_prefix, input_vars, output_vars, aggregate_bins):
     """
         Load an experiment file based on a summary file; combine data from summary into experiment file
     
     Args:
         file_path: Experiment file to load
-        summary_file: Full path of the summary file 
+        summary_data: Summary dataframe
         bin_prefix: Prefix of compound volitility bins if aggregation is used
         input_vars: List of varibles to subset for input
         ouput_vars: List of varibles to subset for ouput
@@ -74,11 +74,13 @@ def get_data_serial(file_path, summary_file, bin_prefix, input_vars, output_vars
     
     df = pd.read_csv(file_path)
     df.columns = [x.strip() for x in df.columns]
+    summary_data.columns = [x.strip() for x in summary_data.columns]
+    
     exp_num = int(re.findall("_Exp(\d+).csv", file_path)[0])
     
-    for variable in summary_file.columns:
+    for variable in summary_data.columns:
         
-        df[variable] = summary_file[summary_file['id'] == 
+        df[variable] = summary_data[summary_data['id'] == 
                                     'Exp{}'.format(exp_num)][variable][exp_num]
     if aggregate_bins: 
         
@@ -158,4 +160,3 @@ def split_data(input_data, output_data, n_splits=2, random_state=8):
     in_test, out_test = remain_in.iloc[test_indx], remain_out.iloc[test_indx]
 
     return in_train, out_train, in_val, out_val, in_test, out_test
-

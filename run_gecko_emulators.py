@@ -6,7 +6,7 @@ import tensorflow as tf
 from geckoml.box import GeckoBoxEmulator
 from geckoml.metrics import ensembled_box_metrics, mae_time_series, match_true_exps
 
-gpus  = tf.config.experimental.list_physical_devices('GPU')
+gpus = tf.config.experimental.list_physical_devices('GPU')
 for device in gpus:
     print(device)
     tf.config.experimental.set_memory_growth(device, True)
@@ -15,14 +15,15 @@ start = time.time()
 
 
 def main():
+
     # read YAML config as provided arg
     parser = argparse.ArgumentParser()
     parser.add_argument("-c", "--config", default="agg_config.yml", help="Path to config file")
     args = parser.parse_args()
     with open(args.config) as config_file:
         config = yaml.load(config_file)
-
-    # Extract config arguments
+    
+    # Extract config arguments and validate if necessary
     species = config['species']
     output_path = config['output_path']
     x_scaler = output_path + config['x_scaler']
@@ -30,7 +31,6 @@ def main():
     nnet = output_path + config['nnet']
     time_steps = config['time_steps']
     num_exps = config['num_exps']
-    output_cols = config["output_vars"]
 
     val_in = pd.read_parquet('{}in_val_{}.parquet'.format(output_path, species))
     val_out = pd.read_parquet('{}out_val_{}.parquet'.format(output_path, species))
@@ -45,7 +45,7 @@ def main():
     print('Hellenger Distance: {}'.format(hd))
     print('RMSE: {}'.format(rmse))
 
-    mae = mae_time_series(y_true, y_preds, output_cols)
+    mae = mae_time_series(y_true, y_preds)
     ax = mae.plot()
     ax.set_title('MAE per Timestep')
     fig = ax.get_figure()

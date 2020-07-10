@@ -62,10 +62,10 @@ def main():
 
     # Rescale training and validation / testing data
     x_scaler, y_scaler = scalers[scaler_type](), scalers[scaler_type]()
-    scaled_in_train = x_scaler.fit_transform(in_train.iloc[:,1:-1])
-    scaled_in_val = x_scaler.transform(in_val.iloc[:,1:-1])
-    scaled_out_train = y_scaler.fit_transform(out_train.iloc[:,1:-1])
-    scaled_out_val = y_scaler.transform(out_val.iloc[:,1:-1])
+    scaled_in_train = x_scaler.fit_transform(in_train.iloc[:, 1:-1])
+    scaled_in_val = x_scaler.transform(in_val.iloc[:, 1:-1])
+    scaled_out_train = y_scaler.fit_transform(out_train.iloc[:, 1:-1])
+    scaled_out_val = y_scaler.transform(out_val.iloc[:, 1:-1])
 
     # Train ML models
     models = {}
