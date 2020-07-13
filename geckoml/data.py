@@ -161,7 +161,9 @@ def split_data(input_data, output_data, n_splits=2, random_state=8):
 
     return in_train, out_train, in_val, out_val, in_test, out_test
 
+import time
 def reshape_data(x_data, y_data, seq_length, ids):
+    start_time = time.time()
     """
     Reshape matrix data into sample shape for LSTM training.
 
@@ -200,7 +202,7 @@ def reshape_data(x_data, y_data, seq_length, ids):
 
         xx[n * n_exp_samps:(n + 1) * n_exp_samps, :, :] = x_new
         yy[n * n_exp_samps:(n + 1) * n_exp_samps, :] = y_new
-
+    print('{} experiments reshaped in {0:0.1f} seconds'.format(exps, time.time() - start))
     return xx, yy
 
 def scale_and_reshape_data(x, y, x_scaler, y_scaler, seq_length):

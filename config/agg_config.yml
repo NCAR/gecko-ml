@@ -44,7 +44,7 @@ model_configurations:
       optimizer: "adam"
       loss: "mse"
       lr: 0.001
-      batch_size: 128
+      batch_size: 1024
       use_noise: False
       noise_sd: 0.01
       epochs: 5
@@ -67,7 +67,7 @@ model_configurations:
       optimizer: "adam"
       loss: "mse"
       lr: 0.001
-      batch_size: 128
+      batch_size: 1024
       use_noise: False
       noise_sd: 0.01
       epochs: 5

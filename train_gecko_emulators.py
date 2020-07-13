@@ -41,7 +41,6 @@ def main():
     save_data = config['save_data']
     output_path = config['output_path']
     scaler_type = config['scaler_type']
-    seq_length = config['seq_length']
 
     if save_data:
 

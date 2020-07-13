@@ -84,8 +84,6 @@ def ensembled_base_metrics(y_true, y_pred, ids, seq_length):
         y_true (np.array): True output data
         y_pred (np.array): Predicted output data
     """
-    print(y_true.shape)
-    print(y_pred.shape)
     y_pred['id'] = ids
     if seq_length > 1:
         y_true = y_true.groupby('id').apply(lambda x: x.iloc[:-seq_length, 1:-1]).values
