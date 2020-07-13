@@ -5,7 +5,9 @@ import time
 import tensorflow as tf
 from geckoml.box import GeckoBoxEmulator
 from geckoml.metrics import ensembled_box_metrics, mae_time_series, match_true_exps
+import os
 
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 gpus = tf.config.experimental.list_physical_devices('GPU')
 for device in gpus:
     print(device)
