@@ -170,7 +170,8 @@ def reshape_data(x_data, y_data, seq_length, ids):
     :param x_data: DataFrame containing input features (columns) and time steps (rows).
     :param y_data: Matrix containing output features (columns) and time steps (rows).
     :param seq_length: Length of look back time steps for one time step of prediction.
-
+    :param ids: Pandas Series of experiment numbers.
+    
     :return: Two np.ndarrays, the first of shape (samples, length of sequence,
         number of features), containing the input data for the LSTM. The second
         of shape (samples, number of output features) containing the expected output for each input
@@ -202,7 +203,7 @@ def reshape_data(x_data, y_data, seq_length, ids):
 
         xx[n * n_exp_samps:(n + 1) * n_exp_samps, :, :] = x_new
         yy[n * n_exp_samps:(n + 1) * n_exp_samps, :] = y_new
-    print('{} experiments reshaped in {0:0.1f} seconds'.format(exps, time.time() - start))
+    print('{} experiments reshaped in {0:0.1f} seconds'.format(exps, time.time() - start_time))
     return xx, yy
 
 def scale_and_reshape_data(x, y, x_scaler, y_scaler, seq_length):
