@@ -45,37 +45,6 @@ def hellinger_distance(y_true, y_pred, bins=50):
     y_pred_pdf = calc_pdf_hist(y_pred, bin_points)
     return hellinger(bin_centers, y_true_pdf, y_pred_pdf)
 
-
-def ensembled_box_metrics(y_true, y_pred):
-    """ Call a variety of metrics to be calculated (Hellenger distance and RMSE, currently) on Box emulator results
-    Args:
-        y_true (np.array): True output data
-        y_pred (np.array): Predicted output data
-    """
-    y_true = y_true.sort_values(['id', 'Time [s]'], ascending=True).iloc[:, 1:-1]
-    y_pred = y_pred.sort_values(['id', 'Time [s]'], ascending=True).iloc[:, :-2]
-
-    hd = hellinger_distance(y_true.iloc[:, 1], y_pred.iloc[:, 1])
-    rmse = root_mean_squared_error(y_true.iloc[:, 1], y_pred.iloc[:, 1])
-
-    return hd, rmse
-
-
-def ensembled_base_metrics(y_true, y_pred):
-    """ Call a variety of metrics to be calculated (Hellenger distance and RMSE, currently) on Base Model results
-    Args:
-        y_true (np.array): True output data
-        y_pred (np.array): Predicted output data
-    """
-
-    y_true = y_true.iloc[:, 1:-1].values
-
-    hd = hellinger_distance(y_true[:, 1], y_pred[:, 1])
-    rmse = root_mean_squared_error(y_true[:, 1], y_pred[:, 1])
-
-    return hd, rmse
-
-
 def mae_time_series(y_true, y_pred):
     """ Calculate the Mean Absolute Error across timesteps
     Args:
@@ -92,6 +61,41 @@ def mae_time_series(y_true, y_pred):
     mae = df_diff.groupby('Time [s]').mean()
 
     return mae
+
+
+def ensembled_box_metrics(y_true, y_pred):
+    """ Call a variety of metrics to be calculated (Hellenger distance and RMSE, currently) on Box emulator results
+    Args:
+        y_true (np.array): True output data
+        y_pred (np.array): Predicted output data
+    """
+    y_true = y_true.sort_values(['id', 'Time [s]'], ascending=True).iloc[:, 1:-1]
+    y_pred = y_pred.sort_values(['id', 'Time [s]'], ascending=True).iloc[:, :-2]
+
+    hd = hellinger_distance(y_true.iloc[:, 1], y_pred.iloc[:, 1])
+    rmse = root_mean_squared_error(y_true.iloc[:, 1], y_pred.iloc[:, 1])
+
+    return hd, rmse
+
+
+def ensembled_base_metrics(y_true, y_pred, ids, seq_length):
+    """ Call a variety of metrics to be calculated (Hellenger distance and RMSE, currently) on Base Model results
+    Args:
+        y_true (np.array): True output data
+        y_pred (np.array): Predicted output data
+    """
+    print(y_true.shape)
+    print(y_pred.shape)
+    y_pred['id'] = ids
+    if seq_length > 1:
+        y_true = y_true.groupby('id').apply(lambda x: x.iloc[:-seq_length, 1:-1]).values
+    else:
+        y_true = y_true.iloc[:, 1:-1].values
+    y_pred = y_pred.iloc[:, :-1].values
+    hd = hellinger_distance(y_true[:, 1], y_pred[:, 1])
+    rmse = root_mean_squared_error(y_true[:, 1], y_pred[:, 1])
+
+    return hd, rmse
 
 
 def match_true_exps(truth, preds, num_timesteps):

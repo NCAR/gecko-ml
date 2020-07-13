@@ -80,4 +80,3 @@ model_configurations:
       decay: 0
       verbose: 1
       classifier: False
-

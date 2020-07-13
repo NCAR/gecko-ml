@@ -7,13 +7,11 @@ from geckoml.box import GeckoBoxEmulator
 from geckoml.metrics import ensembled_box_metrics, mae_time_series, match_true_exps
 import os
 
-import os
-
-#os.environ["CUDA_VISIBLE_DEVICES"] = "1"
-#gpus = tf.config.experimental.list_physical_devices('GPU')
-#or device in gpus:
-#    print(device)
-#    tf.config.experimental.set_memory_growth(device, True)
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+gpus = tf.config.experimental.list_physical_devices('GPU')
+or device in gpus:
+    print(device)
+    tf.config.experimental.set_memory_growth(device, True)
 
 start = time.time()
 

@@ -161,8 +161,7 @@ def split_data(input_data, output_data, n_splits=2, random_state=8):
 
     return in_train, out_train, in_val, out_val, in_test, out_test
 
-
-def reshape_data(x_data, y_data, seq_length):
+def reshape_data(x_data, y_data, seq_length, ids):
     """
     Reshape matrix data into sample shape for LSTM training.
 
@@ -175,23 +174,23 @@ def reshape_data(x_data, y_data, seq_length):
         of shape (samples, number of output features) containing the expected output for each input
         sample.
     """
+    x_data['id'] = ids
+    y_data['id'] = ids
     exps = x_data['id'].unique()
     num_samples = x_data.shape[0]
-    num_features = len(x_data.columns[1:-1])
-    num_output = len(y_data.columns[1:-1])
+    num_features = len(x_data.columns[:-1])
+    num_output = len(y_data.columns[:-1])
 
     xx = np.zeros((num_samples - (len(exps) * seq_length), seq_length, num_features))
     yy = np.zeros((num_samples - (len(exps) * seq_length), num_output))
 
     for n, exp in enumerate(exps):
 
-        x = x_data[x_data['id'] == exp].iloc[:, 1:-1].values
-        y = y_data[y_data['id'] == exp].iloc[:, 1:-1].values
+        x = x_data[x_data['id'] == exp].iloc[:, :-1].values
+        y = y_data[y_data['id'] == exp].iloc[:, :-1].values
         n_exp_samps = x.shape[0] - seq_length
-
         num_samples, num_features = x.shape
-        num_output = len(y_data.columns[1:-1])
-
+        num_output = len(y_data.columns[:-1])
         x_new = np.zeros((num_samples - seq_length, seq_length, num_features))
         y_new = np.zeros((num_samples - seq_length, num_output))
 
@@ -199,8 +198,18 @@ def reshape_data(x_data, y_data, seq_length):
             x_new[i, :, :num_features] = x[i:i + seq_length, :]
             y_new[i, :] = y[i + seq_length, :]
 
-        print(x_new.shape)
         xx[n * n_exp_samps:(n + 1) * n_exp_samps, :, :] = x_new
         yy[n * n_exp_samps:(n + 1) * n_exp_samps, :] = y_new
 
     return xx, yy
+
+def scale_and_reshape_data(x, y, x_scaler, y_scaler, seq_length):
+    return
+
+
+
+
+
+
+
+
