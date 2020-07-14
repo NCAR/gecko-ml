@@ -161,53 +161,34 @@ def split_data(input_data, output_data, n_splits=2, random_state=8):
 
     return in_train, out_train, in_val, out_val, in_test, out_test
 
-import time
-def reshape_data(x_data, y_data, seq_length, ids):
-    start_time = time.time()
+def reshape_data(x_data, y_data, seq_length, num_timesteps):
     """
     Reshape matrix data into sample shape for LSTM training.
 
     :param x_data: DataFrame containing input features (columns) and time steps (rows).
     :param y_data: Matrix containing output features (columns) and time steps (rows).
     :param seq_length: Length of look back time steps for one time step of prediction.
-    :param ids: Pandas Series of experiment numbers.
+    :param num_timesteps (int): number of time_steps per experiment.
     
     :return: Two np.ndarrays, the first of shape (samples, length of sequence,
         number of features), containing the input data for the LSTM. The second
         of shape (samples, number of output features) containing the expected output for each input
         sample.
     """
-    x_data['id'] = ids
-    y_data['id'] = ids
-    exps = x_data['id'].unique()
-    num_samples = x_data.shape[0]
-    num_features = len(x_data.columns[:-1])
-    num_output = len(y_data.columns[:-1])
+    num_samples, num_features = x_data.shape
+    num_output = y_data.shape[1]
+    num_exps = int(num_samples / num_timesteps)
+    num_seq_ts = num_timesteps - seq_length + 1
 
-    xx = np.zeros((num_samples - (len(exps) * seq_length), seq_length, num_features))
-    yy = np.zeros((num_samples - (len(exps) * seq_length), num_output))
+    x_new = np.zeros((num_exps * num_seq_ts, seq_length, num_features))
+    y_new = np.zeros((num_exps * num_seq_ts, num_output))
+    for i in range(num_exps):
+        for j in range(num_seq_ts):
+            x_new[(i * num_seq_ts) + j, :, :] = x_data[(num_timesteps * i) + j:(num_timesteps * i) + j + seq_length, :]
+            y_new[(i * num_seq_ts) + j, :] = y_data[(num_timesteps * i) + j + seq_length - 1, :]
 
-    for n, exp in enumerate(exps):
+    return x_new, y_new
 
-        x = x_data[x_data['id'] == exp].iloc[:, :-1].values
-        y = y_data[y_data['id'] == exp].iloc[:, :-1].values
-        n_exp_samps = x.shape[0] - seq_length
-        num_samples, num_features = x.shape
-        num_output = len(y_data.columns[:-1])
-        x_new = np.zeros((num_samples - seq_length, seq_length, num_features))
-        y_new = np.zeros((num_samples - seq_length, num_output))
-
-        for i in range(0, x_new.shape[0]):
-            x_new[i, :, :num_features] = x[i:i + seq_length, :]
-            y_new[i, :] = y[i + seq_length, :]
-
-        xx[n * n_exp_samps:(n + 1) * n_exp_samps, :, :] = x_new
-        yy[n * n_exp_samps:(n + 1) * n_exp_samps, :] = y_new
-    print('{} experiments reshaped in {0:0.1f} seconds'.format(exps, time.time() - start_time))
-    return xx, yy
-
-def scale_and_reshape_data(x, y, x_scaler, y_scaler, seq_length):
-    return
 
 
 

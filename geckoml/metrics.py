@@ -84,11 +84,13 @@ def ensembled_base_metrics(y_true, y_pred, ids, seq_length):
         y_true (np.array): True output data
         y_pred (np.array): Predicted output data
     """
+
     y_pred['id'] = ids
     if seq_length > 1:
-        y_true = y_true.groupby('id').apply(lambda x: x.iloc[:-seq_length, 1:-1]).values
+        y_true = y_true.groupby('id').apply(lambda x: x.iloc[:-(seq_length - 1), 1:-1]).values
     else:
         y_true = y_true.iloc[:, 1:-1].values
+
     y_pred = y_pred.iloc[:, :-1].values
     hd = hellinger_distance(y_true[:, 1], y_pred[:, 1])
     rmse = root_mean_squared_error(y_true[:, 1], y_pred[:, 1])
