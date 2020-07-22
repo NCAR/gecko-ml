@@ -7,10 +7,12 @@ import time
 import joblib
 import pandas as pd
 import argparse
+import numpy as np
 import yaml
 
 start = time.time()
-seed = 88331
+seed = 8886
+np.random.seed(seed)
 tf.random.set_seed(seed)
 
 scalers = {"MinMaxScaler": MinMaxScaler,
@@ -50,22 +52,28 @@ def main():
     in_train, out_train, in_val, out_val, in_test, out_test = split_data(
         input_data=input_data, output_data=output_data, random_state=seed)
 
+    #in_val.to_parquet('{}in_val_no_agg{}.parquet'.format(output_path, species))
+    #out_val.to_parquet('{}out_val_no_agg{}.parquet'.format(output_path, species))
+    #in_train.to_parquet('{}in_trian_no_agg{}.parquet'.format(output_path, species))
+    #out_train.to_parquet('{}out_train_no_agg{}.parquet'.format(output_path, species))
+
     # Rescale training and validation / testing data
     x_scaler, y_scaler = scalers[scaler_type](), scalers[scaler_type]()
-    num_timesteps, num_exps = in_train['Time [s]'].nunique(), in_train['id'].nunique()
+    num_timesteps = in_train['Time [s]'].nunique()
 
     scaled_in_train = x_scaler.fit_transform(in_train.drop(['Time [s]', 'id'], axis=1))
-    scaled_in_val = x_scaler.transform(in_val.drop(['Time [s]', 'id'], axis=1))
     scaled_out_train = y_scaler.fit_transform(out_train.drop(['Time [s]', 'id'], axis=1))
+    scaled_in_val = x_scaler.transform(in_val.drop(['Time [s]', 'id'], axis=1))
     scaled_out_val = y_scaler.transform(out_val.drop(['Time [s]', 'id'], axis=1))
 
     val_ids = in_val['id'].values
-    val_id = in_val.groupby('id').apply(lambda x: x.iloc[:-(seq_length - 1), :])['id'].values
+    val_id = in_val.groupby('id').apply(lambda x: x.iloc[(seq_length - 1):, :])['id'].values
 
     scaled_in_train_ts, scaled_out_train_ts = reshape_data(scaled_in_train.copy(), scaled_out_train.copy(),
                                                            seq_length, num_timesteps)
     scaled_in_val_ts, scaled_out_val_ts = reshape_data(scaled_in_val.copy(), scaled_out_val.copy(),
                                                        seq_length, num_timesteps)
+
     # Train ML models and get validation metrics
     models, metrics = {}, {}
     for model_type in config["model_configurations"].keys():
@@ -76,18 +84,16 @@ def main():
                 models[model_name] = DenseNeuralNetwork(**model_config)
                 models[model_name].fit(scaled_in_train, scaled_out_train)
 
-                seq_length = 1
                 preds = models[model_name].predict(scaled_in_val)
                 transformed_preds = pd.DataFrame(y_scaler.inverse_transform(preds))
-                metrics[model_name] = ensembled_base_metrics(out_val, transformed_preds, val_ids, seq_length)
+                metrics[model_name] = ensembled_base_metrics(out_val, transformed_preds, val_ids)
 
         elif model_type == 'multi_ts_models':
 
             for model_name, model_config in config['model_configurations'][model_type].items():
                 models[model_name] = LongShortTermMemoryNetwork(**model_config)
                 models[model_name].fit(scaled_in_train_ts, scaled_out_train_ts)
-                seq_length = config['seq_length']
-                preds = models[model_name].predict(scaled_in_val_ts, scaled_out_val_ts)
+                preds = models[model_name].predict(scaled_in_val_ts)
                 transformed_preds = pd.DataFrame(y_scaler.inverse_transform(preds))
                 metrics[model_name] = ensembled_base_metrics(out_val, transformed_preds, val_id, seq_length)
 

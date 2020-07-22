@@ -1,20 +1,17 @@
 species: 'dodecane'
-dir_path: '/glade/p/cisl/aiml/gecko/ML2019_dodecane_postproc/'
+dir_path: '/Users/cbecker/PycharmProjects/gecko-ml/exp_data/'
 summary_file: 'C02000_Exp_List_ML2019_dodecane_v1_LatinHyperCube.csv'
 aggregate_bins: True
 save_models: True
-save_data: True
-scaler_type: "StandardScaler"
-output_path: '/glade/work/cbecker/gecko-ml/save_out/'
+scaler_type: "MinMaxScaler"
+output_path: '/Users/cbecker/PycharmProjects/gecko-ml/save_out/'
 x_scaler: 'dodecane_x.scaler'
 y_scaler: 'dodecane_y.scaler'
-nnet: 'lstm_1'
 bin_prefix: ['Gas [ug/m3]', 'Aerosol [ug_m3]']
 min_exp: 0
 max_exp: 1999
-time_steps: 1439
 seq_length: 5
-num_exps: 3
+num_exps: 5
 input_vars: [
     'Time [s]',
     'Precursor [ug/m3]',
@@ -38,7 +35,7 @@ model_configurations:
   single_ts_models:
     dnn_1:
       hidden_layers: 1
-      hidden_neurons: 64
+      hidden_neurons: 4
       activation: "relu"
       output_activation: "linear"
       optimizer: "adam"
@@ -47,7 +44,7 @@ model_configurations:
       batch_size: 1024
       use_noise: False
       noise_sd: 0.01
-      epochs: 5
+      epochs: 1
       use_dropout: False
       dropout_alpha: 0.1
       l2_weight: 0.01
@@ -61,9 +58,9 @@ model_configurations:
   multi_ts_models:
     lstm_1:
       hidden_layers: 1
-      hidden_neurons: 64
-      activation: "relu"
-      output_activation: "linear"
+      hidden_neurons: 100
+      activation: "tanh"
+      output_activation: "tanh"
       optimizer: "adam"
       loss: "mse"
       lr: 0.001
@@ -78,6 +75,6 @@ model_configurations:
       adam_beta_1: 0.9
       adam_beta_2: 0.999
       decay: 0
-      verbose: 0
+      verbose: 1
       classifier: False
 

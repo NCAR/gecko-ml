@@ -45,6 +45,11 @@ def hellinger_distance(y_true, y_pred, bins=50):
     y_pred_pdf = calc_pdf_hist(y_pred, bin_points)
     return hellinger(bin_centers, y_true_pdf, y_pred_pdf)
 
+
+def r2_corr(y_true, y_pred):
+    return np.corrcoef(y_true, y_pred)[0, 1] ** 2
+
+
 def mae_time_series(y_true, y_pred):
     """ Calculate the Mean Absolute Error across timesteps
     Args:
@@ -69,47 +74,70 @@ def ensembled_box_metrics(y_true, y_pred):
         y_true (np.array): True output data
         y_pred (np.array): Predicted output data
     """
-    y_true = y_true.sort_values(['id', 'Time [s]'], ascending=True).iloc[:, 1:-1]
-    y_pred = y_pred.sort_values(['id', 'Time [s]'], ascending=True).iloc[:, :-2]
+    if len(y_true.columns) > 5:
+        preds = np.empty((y_pred.shape[0], 3))
+        preds[:, 0] = y_pred.iloc[:, 0]
+        preds[:, 1] = np.sum(y_pred.iloc[:, 0:14], axis=1)
+        preds[:, 2] = np.sum(y_pred.iloc[:, 14:-2], axis=1)
 
-    hd = hellinger_distance(y_true.iloc[:, 1], y_pred.iloc[:, 1])
-    rmse = root_mean_squared_error(y_true.iloc[:, 1], y_pred.iloc[:, 1])
+        truth = np.empty((y_true.shape[0], 3))
+        truth[:, 0] = y_true.iloc[:, 1]
+        truth[:, 1] = np.sum(y_true.iloc[:, 2:16], axis=1)
+        truth[:, 2] = np.sum(y_true.iloc[:, 16:-1], axis=1)
 
-    return hd, rmse
+    else:
+        preds = y_pred.sort_values(['id', 'Time [s]'], ascending=True).iloc[:, :-2].values
+        truth = y_true.sort_values(['id', 'Time [s]'], ascending=True).iloc[:, 1:-1].values
+
+    metrics = {}
+    rmse_l, r2_l, hd_l = [], [], []
+
+    for i in np.arange(3):
+        rmse_l.append(root_mean_squared_error(truth[:, i], preds[:, i]))
+    metrics['RMSE'] = rmse_l
+    for i in np.arange(3):
+        r2_l.append(r2_corr(truth[:, i], preds[:, i]))
+    metrics['R2'] = r2_l
+    for i in np.arange(3):
+        hd_l.append(hellinger_distance(truth[:, i], preds[:, i]))
+    metrics['HD'] = hd_l
+
+    return metrics
 
 
-def ensembled_base_metrics(y_true, y_pred, ids, seq_length):
+def ensembled_base_metrics(y_true, y_pred, ids, seq_length=1):
     """ Call a variety of metrics to be calculated (Hellenger distance and RMSE, currently) on Base Model results
     Args:
         y_true (np.array): True output data
         y_pred (np.array): Predicted output data
     """
-
     y_pred['id'] = ids
     if seq_length > 1:
-        y_true = y_true.groupby('id').apply(lambda x: x.iloc[:-(seq_length - 1), 1:-1]).values
+        y_true = y_true.groupby('id').apply(lambda x: x.iloc[(seq_length - 1):, 1:-1]).values
+
     else:
         y_true = y_true.iloc[:, 1:-1].values
 
     y_pred = y_pred.iloc[:, :-1].values
-    hd = hellinger_distance(y_true[:, 1], y_pred[:, 1])
-    rmse = root_mean_squared_error(y_true[:, 1], y_pred[:, 1])
+    hd = hellinger_distance(y_true, y_pred)
+    rmse = root_mean_squared_error(y_true, y_pred)
 
     return hd, rmse
 
 
-def match_true_exps(truth, preds, num_timesteps):
+def match_true_exps(truth, preds, num_timesteps, seq_length):
     """ Retrieve true values that match the experiments used in previous box emulator run
     Args:
         truth (DataFrame): True output data
         preds (DataFrame): Predicted output data
         num_timesteps (int): number of timesteps used in emulator runs to pull equivalent number from true data
     """
+    num_seq_ts = num_timesteps - seq_length + 1
     exps = preds['id'].unique()
     true_sub = truth.loc[truth['id'].isin(exps)]
-    true_sub = true_sub.groupby('id').apply(lambda x: x.iloc[:num_timesteps, :]).reset_index(drop=True)
-
+    true_sub = true_sub.groupby('id').apply(lambda x: x.iloc[seq_length - 1: num_timesteps, :]).reset_index(drop=True)
     true_sub = true_sub.sort_values(['id', 'Time [s]'])
-    preds = preds.sort_values(['id', 'Time [s]'])
 
+    preds = preds.sort_values(['id', 'Time [s]']).reset_index(drop=True)
+    preds.columns = [str(x) for x in preds.columns]
     return true_sub, preds

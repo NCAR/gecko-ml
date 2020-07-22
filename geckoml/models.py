@@ -4,6 +4,7 @@ from tensorflow.keras.models import Model
 from tensorflow.keras.regularizers import l2
 from tensorflow.keras.optimizers import Adam, SGD
 import tensorflow.keras.backend as K
+import tensorflow as tf
 import numpy as np
 import xarray as xr
 import pandas as pd
@@ -336,17 +337,25 @@ class LongShortTermMemoryNetwork(object):
             inputs (int): Number of input predictor variables
             outputs (int): Number of output predictor variables
         """
+        seed = 8886
+        np.random.seed(seed)
+        tf.random.set_seed(seed)
+
         nn_input = Input(shape=(inputs, seq_input), name="input")
         nn_model = nn_input
-        for h in range(self.hidden_layers):
-            nn_model = LSTM(self.hidden_neurons, activation=self.activation,
-                            kernel_regularizer=l2(self.l2_weight), name=f"dense_{h:02d}")(nn_model)
+        for h in np.arange(self.hidden_layers):
+            if h == np.arange(self.hidden_layers)[-1]:
+                nn_model = LSTM(self.hidden_neurons, return_sequences=True,
+                                name=f"lstm_{h:02d}")(nn_model)
+            else:
+                nn_model = LSTM(self.hidden_neurons, return_sequences=True,
+                                name=f"lstm_{h:02d}")(nn_model)
             if self.use_dropout:
                 nn_model = Dropout(self.dropout_alpha, name=f"dropout_h_{h:02d}")(nn_model)
             if self.use_noise:
                 nn_model = GaussianNoise(self.noise_sd, name=f"ganoise_h_{h:02d}")(nn_model)
-        nn_model = Dense(outputs,
-                         activation=self.output_activation, name=f"dense_{self.hidden_layers:02d}")(nn_model)
+        nn_model = LSTM(outputs,
+                         activation=self.output_activation, name=f"lstm_{self.hidden_layers:02d}")(nn_model)
         self.model = Model(nn_input, nn_model)
         if self.optimizer == "adam":
             self.optimizer_obj = Adam(lr=self.lr, beta_1=self.adam_beta_1, beta_2=self.adam_beta_2, decay=self.decay)
@@ -372,7 +381,8 @@ class LongShortTermMemoryNetwork(object):
                 y_class[y == label, l] = 1
             self.model.fit(x, y_class, batch_size=self.batch_size, epochs=self.epochs, verbose=self.verbose)
         else:
-            self.model.fit(x, y, batch_size=self.batch_size, epochs=self.epochs, verbose=self.verbose)
+            self.model.fit(x, y, batch_size=self.batch_size, epochs=self.epochs, verbose=self.verbose, shuffle=True)
+
         return
 
     def save_fortran_model(self, filename):
@@ -394,7 +404,7 @@ class LongShortTermMemoryNetwork(object):
         return
 
 
-    def predict(self, x, y):
+    def predict(self, x):
         if self.classifier:
             y_prob = self.model.predict(x, batch_size=self.batch_size)
             y_out = self.y_labels[np.argmax(y_prob, axis=1)].ravel()
@@ -402,6 +412,3 @@ class LongShortTermMemoryNetwork(object):
             y_out = self.model.predict(x, batch_size=self.batch_size)
         return y_out
 
-    def predict_proba(self, x):
-        y_prob = self.model.predict(x, batch_size=self.batch_size)
-        return y_prob
