@@ -6,14 +6,11 @@ import joblib
 from sklearn.preprocessing import StandardScaler, RobustScaler, MaxAbsScaler, MinMaxScaler
 import tensorflow as tf
 from geckoml.box import GeckoBoxEmulator, GeckoBoxEmulatorTS
-from geckoml.metrics import ensembled_box_metrics, mae_time_series, match_true_exps
+from geckoml.metrics import ensembled_box_metrics, plot_mae_ts, match_true_exps
 from dask.distributed import Client, LocalCluster
-import os
 
-#os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 gpus = tf.config.experimental.list_physical_devices('GPU')
 for device in gpus:
-    print(device)
     tf.config.experimental.set_memory_growth(device, True)
 
 start = time.time()
@@ -54,10 +51,8 @@ def main():
     time_steps = val_in['Time [s]'].nunique()
 
     # Run multiple GECKO experiments in parallel
-
-    cluster = LocalCluster(processes=True)
+    cluster = LocalCluster(processes=True, n_workers=72, threads_per_worker=1)
     client = Client(cluster)
-
     models, metrics = {}, {}
     for model_type in config["model_configurations"].keys():
 
@@ -73,6 +68,7 @@ def main():
                 y_true, y_preds = match_true_exps(truth=val_out, preds=box_preds, num_timesteps=time_steps,
                                                   seq_length=seq_length)
                 metrics[model_name] = ensembled_box_metrics(y_true, y_preds)
+                plot_mae_ts(y_true, y_preds, output_path, model_name)
 
         elif model_type == 'multi_ts_models':
 
@@ -86,25 +82,15 @@ def main():
                 y_true, y_preds = match_true_exps(truth=val_out, preds=box_preds, num_timesteps=time_steps,
                                                   seq_length=seq_length)
                 metrics[model_name] = ensembled_box_metrics(y_true, y_preds)
+                plot_mae_ts(y_true, y_preds, output_path, model_name)
+
     client.shutdown()
 
-    print(metrics)
-
-
-    #ax = y_true.plot(x=0, y=[1, 2, 3])
-    #y_preds.plot(x=3, y=[0, 1, 2], ax=ax)
-    #fig = ax.get_figure()
-    #fig.savefig('{}{}box_plot.png'.format(output_path, species), bbox_inches='tight')
-
-    #ax = y_true.plot()
-    #ax.set_title('MAE per Timestep')
-    #fig = ax.get_figure()
-    #fig.savefig('{}{}mae_timeseries.png'.format(output_path, species), bbox_inches='tight')
-    #mae = mae_time_series(y_true, y_preds)
-    #ax = mae.plot()
-    #ax.set_title('MAE per Timestep')
-    #fig = ax.get_figure()
-    #fig.savefig('{}{}mae_timeseries.png'.format(output_path, species), bbox_inches='tight')
+    # write metrics to file
+    metrics_str = [f'{key} : {metrics[key]}' for key in metrics]
+    with open('{}box_results.txt'.format(output_path), 'a') as f:
+        [f.write(f'{st}\n') for st in metrics_str]
+        f.write('\n')
 
     print('Completed in {0:0.1f} seconds'.format(time.time() - start))
     return

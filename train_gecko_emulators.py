@@ -52,11 +52,6 @@ def main():
     in_train, out_train, in_val, out_val, in_test, out_test = split_data(
         input_data=input_data, output_data=output_data, random_state=seed)
 
-    #in_val.to_parquet('{}in_val_no_agg{}.parquet'.format(output_path, species))
-    #out_val.to_parquet('{}out_val_no_agg{}.parquet'.format(output_path, species))
-    #in_train.to_parquet('{}in_trian_no_agg{}.parquet'.format(output_path, species))
-    #out_train.to_parquet('{}out_train_no_agg{}.parquet'.format(output_path, species))
-
     # Rescale training and validation / testing data
     x_scaler, y_scaler = scalers[scaler_type](), scalers[scaler_type]()
     num_timesteps = in_train['Time [s]'].nunique()
@@ -97,8 +92,11 @@ def main():
                 transformed_preds = pd.DataFrame(y_scaler.inverse_transform(preds))
                 metrics[model_name] = ensembled_base_metrics(out_val, transformed_preds, val_id, seq_length)
 
-    for model_name, metric_values in metrics.items():
-        print('{}: HD: {}, RMSE: {}'.format(model_name, metric_values[0], metric_values[1]))
+    # write results
+    metrics_str = [f'{key} : {metrics[key]}' for key in metrics]
+    with open('{}base_results.txt'.format(output_path), 'a') as f:
+        [f.write(f'{st}\n') for st in metrics_str]
+        f.write('\n')
 
     # Save ML models, scaler objects, and validation
     if save_models:

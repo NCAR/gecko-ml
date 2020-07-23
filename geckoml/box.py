@@ -5,7 +5,6 @@ import tensorflow as tf
 from tensorflow.keras.models import load_model
 
 
-
 class GeckoBoxEmulator(object):
     """
     Forward running box emulator for the GECKO-A atmospheric chemistry model. Uses first timestep of an experiment
@@ -14,8 +13,8 @@ class GeckoBoxEmulator(object):
 
     Attributes:
           neural_net_path (str): Path to saved neural network.
-          input_scaler_path (str): Path to input scaler object used to train neural network.
-          output_scaler_path (str): Path to output scaler object used to train neural network.
+          input_scaler (str): X Scaler object used on data to train the neural network.
+          output_scaler (str): Y Scaler object used on data to train the neural network.
     """
     def __init__(self, neural_net_path, input_scaler, output_scaler):
 
@@ -29,6 +28,7 @@ class GeckoBoxEmulator(object):
         """
         Run an ensemble of GECKO-A experiment emulations distributed over a cluster using dask distributed.
         Args:
+            client: Dask distributed TCP client
             data (DataFrame): Validation/testing dataframe split by experiment.
             num_timesteps (int): Number of timesteps to run each emulation forward.
             num_exps (int or 'all'): Number of experiments to run. Defaults to 'all' within data provided. If (int),
@@ -60,7 +60,7 @@ class GeckoBoxEmulator(object):
             time_series (Pandas Series): Pandas 'Time' column from experiment data.
             starting_ts (int): Timestep number to start emulation (should match starting conditions). Defaults to 0.
             seq_length (int): Number of timesteps to use for single prediction. Must match the data shape used to
-                    train the nueral network. Most RNN/LSTM will be > 1. Defaults to 0.
+                    train the neural network. Most RNN/LSTM will be > 1. Defaults to 1.
 
         Returns:
             results (DataFrame): Pandas dataframe of emulated values with time stamps.
@@ -95,9 +95,10 @@ class GeckoBoxEmulator(object):
 
         return results
 
-    def get_starting_conds(self, data, exp, seq_len=1, starting_ts=0):
+    @staticmethod
+    def get_starting_conds(data, exp, seq_len=1, starting_ts=0):
         """
-        Retrive initial conditions for given experiment.
+        Retrieve initial conditions for given experiment.
         Args:
              data (DataFrame): Validation or testing DataFrame.
              exp (str): Experiment label in form ('Exp####') without preceding zeros (ex. experiment 18 would be
@@ -137,8 +138,10 @@ class GeckoBoxEmulatorTS(object):
 
     Attributes:
           neural_net_path (str): Path to saved neural network.
-          input_scaler_path (str): Path to input scaler object used to train neural network.
-          output_scaler_path (str): Path to output scaler object used to train neural network.
+          output_scaler (str): Path to output scaler object used to train neural network.
+          seq_length (int): Sequence length used to train RNN/LSTM network.
+          input_cols (list): List of input variables.
+          output_cols (lsit): List of output variables.
     """
 
     def __init__(self, neural_net_path, output_scaler, seq_length, input_cols, output_cols):
@@ -155,6 +158,7 @@ class GeckoBoxEmulatorTS(object):
         """
         Run an ensemble of GECKO-A experiment emulations distributed over a cluster using dask distributed.
         Args:
+            client: Dask distributed TCP client.
             data (DataFrame): Validation/testing dataframe split by experiment.
             num_timesteps (int): Number of timesteps to run each emulation forward.
             num_exps (int or 'all'): Number of experiments to run. Defaults to 'all' within data provided. If (int),
@@ -180,10 +184,8 @@ class GeckoBoxEmulatorTS(object):
         results = client.gather(futures)
         results_df = pd.concat(results)
         results_df.columns = [str(x) for x in results_df.columns]
-        results_df.to_parquet('/Users/cbecker/PycharmProjects/gecko-ml/save_out/results_df.parq')
 
         return results_df
-
 
     def predict_ts(self, starting_conds, num_timesteps, time_series, exp):
         """ Run emulation of single experiment given initial conditions.
@@ -191,16 +193,14 @@ class GeckoBoxEmulatorTS(object):
             starting_conds (DataFrame): DataFrame of initial conditions.
             num_timesteps (int): Length of timesteps to run emulation.
             time_series (Pandas Series): Pandas 'Time' column from experiment data.
-            starting_ts (int): Timestep number to start emulation (should match starting conditions). Defaults to 0.
-            seq_length (int): Number of timesteps to use for single prediction. Must match the data shape used to
-                    train the nueral network. Most RNN/LSTM will be > 1. Defaults to 0.
+            exp (Pandas Series): Series of Experiment ID
 
         Returns:
             results (DataFrame): Pandas dataframe of emulated values with time stamps.
         """
-        # tf.keras.backend.clear_session()
-        # gc.collect()
-        #print(self.output_scaler_path)
+        tf.keras.backend.clear_session()
+        gc.collect()
+
         mod = load_model(self.neural_net_path)
         ts = num_timesteps - self.seq_length + 1
         results = np.empty((ts, starting_conds.shape[2] - 6))
@@ -212,7 +212,7 @@ class GeckoBoxEmulatorTS(object):
             if i == 0:
 
                 pred = mod.predict(starting_conds)
-                results[i, :] = pred  # y_scaler.inverse_transform(pred)
+                results[i, :] = pred
                 new_input_single[:, :, -6:] = static_input
                 new_input_single[:, :, :-6] = pred
                 x = starting_conds[:, 1:, :]
@@ -221,7 +221,7 @@ class GeckoBoxEmulatorTS(object):
             else:
 
                 pred = mod.predict(new_input)
-                results[i, :] = pred  # y_scaler.inverse_transform(pred)
+                results[i, :] = pred
 
                 new_input_single[:, :, -6:] = static_input
                 new_input_single[:, :, :-6] = pred
@@ -235,10 +235,16 @@ class GeckoBoxEmulatorTS(object):
         return results_df
 
     def get_starting_conds_ts(self, data, starting_ts=0):
+        """ Get 3D starting conditions in the format accepted by an RNN/LSTM Model.
+        Args:
+            data (Pandas DataFrame): Input Dataframe of specific experiment
+            starting_ts (int): Timestep to pull initial conditions from
+        Return:
+            sc (numpy array): 3D array of sequenced data used for input into an RNN/LSTM model.
+        """
 
         sc = np.zeros((1, self.seq_length, data.shape[1]))
         for i in range(self.seq_length):
             sc[0, i, :] = data.iloc[starting_ts + i, :].copy()
 
         return sc
-

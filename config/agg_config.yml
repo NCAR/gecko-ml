@@ -3,6 +3,7 @@ dir_path: '/glade/p/cisl/aiml/gecko/ML2019_dodecane_postproc/'
 summary_file: 'C02000_Exp_List_ML2019_dodecane_v1_LatinHyperCube.csv'
 aggregate_bins: True
 save_models: True
+seq_length: 5
 scaler_type: "MinMaxScaler"
 output_path: '/glade/work/cbecker/gecko-ml/save_out/'
 x_scaler: 'dodecane_x.scaler'
@@ -10,8 +11,7 @@ y_scaler: 'dodecane_y.scaler'
 bin_prefix: ['Gas [ug/m3]', 'Aerosol [ug_m3]']
 min_exp: 0
 max_exp: 1999
-seq_length: 5
-num_exps: 100
+num_exps: 'all'
 input_vars: [
     'Time [s]',
     'Precursor [ug/m3]',
@@ -35,7 +35,7 @@ model_configurations:
   single_ts_models:
     dnn_1:
       hidden_layers: 1
-      hidden_neurons: 4
+      hidden_neurons: 100
       activation: "relu"
       output_activation: "linear"
       optimizer: "adam"
@@ -44,7 +44,7 @@ model_configurations:
       batch_size: 1024
       use_noise: False
       noise_sd: 0.01
-      epochs: 1
+      epochs: 10
       use_dropout: False
       dropout_alpha: 0.1
       l2_weight: 0.01
@@ -58,7 +58,7 @@ model_configurations:
   multi_ts_models:
     lstm_1:
       hidden_layers: 1
-      hidden_neurons: 100
+      hidden_neurons: 64
       activation: "tanh"
       output_activation: "tanh"
       optimizer: "adam"

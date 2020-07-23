@@ -122,7 +122,7 @@ class DenseNeuralNetwork(object):
                 num_dense += 1
         nn_ds["layer_names"] = (("num_layers",), np.array(layer_names))
         nn_ds.attrs["num_layers"] = num_dense
-        nn_ds.to_netcdf(filename, encoding={'layer_names':{'dtype': 'S1'}})
+        nn_ds.to_netcdf(filename, encoding={'layer_names': {'dtype': 'S1'}})
         return
 
     def predict(self, x):
@@ -277,6 +277,7 @@ class DenseGAN(object):
         predictions = self.generator.predict(x).ravel()
         return predictions
 
+
 class LongShortTermMemoryNetwork(object):
     """
     A Long Short Term Memory Model that can support arbitrary numbers of hidden layers.
@@ -329,19 +330,20 @@ class LongShortTermMemoryNetwork(object):
         self.model = None
         self.optimizer_obj = None
 
-    def build_neural_network(self, inputs, seq_input, outputs):
+    def build_neural_network(self, seq_input, inputs, outputs):
         """
         Create Keras neural network model and compile it.
 
         Args:
             inputs (int): Number of input predictor variables
             outputs (int): Number of output predictor variables
+            seq_input (int): Number of timesteps (length of sequence)
         """
         seed = 8886
         np.random.seed(seed)
         tf.random.set_seed(seed)
 
-        nn_input = Input(shape=(inputs, seq_input), name="input")
+        nn_input = Input(shape=(seq_input, inputs), name="input")
         nn_model = nn_input
         for h in np.arange(self.hidden_layers):
             if h == np.arange(self.hidden_layers)[-1]:

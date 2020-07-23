@@ -1,6 +1,6 @@
 from sklearn.metrics import mean_squared_error
 import numpy as np
-
+import pandas as pd
 
 def calc_pdf_hist(x, x_bins):
     """ Calculate Probability Density Function. Normalized as the integral over the range == 1
@@ -47,6 +47,11 @@ def hellinger_distance(y_true, y_pred, bins=50):
 
 
 def r2_corr(y_true, y_pred):
+    """ Calculate the coefficient of determination (R-squared).
+    Args:
+        y_true (np.array): True output data
+        y_pred (np.array): Predicted output data
+    """
     return np.corrcoef(y_true, y_pred)[0, 1] ** 2
 
 
@@ -60,6 +65,20 @@ def mae_time_series(y_true, y_pred):
     y_true = y_true.sort_values(['id', 'Time [s]'], ascending=True).iloc[:, 1:-1]
     y_pred = y_pred.sort_values(['id', 'Time [s]'], ascending=True).iloc[:, :-2]
 
+    if len(y_true.columns) > 5:
+        preds = np.empty((y_pred.shape[0], 3))
+        preds[:, 0] = y_pred.iloc[:, 0]
+        preds[:, 1] = np.sum(y_pred.iloc[:, 0:14], axis=1)
+        preds[:, 2] = np.sum(y_pred.iloc[:, 14:-2], axis=1)
+
+        truth = np.empty((y_true.shape[0], 3))
+        truth[:, 0] = y_true.iloc[:, 1]
+        truth[:, 1] = np.sum(y_true.iloc[:, 2:16], axis=1)
+        truth[:, 2] = np.sum(y_true.iloc[:, 16:-1], axis=1)
+
+        cols = ['Precursor [ug/m3]', 'Gas [ug/m3]', 'Aerosol [ug_m3]']
+        y_true, y_pred = pd.DataFrame(truth, columns=cols), pd.DataFrame(preds, columns=cols)
+
     df_diff = np.abs(y_true - y_pred)
 
     df_diff['Time [s]'] = time_series
@@ -67,12 +86,29 @@ def mae_time_series(y_true, y_pred):
 
     return mae
 
-
-def ensembled_box_metrics(y_true, y_pred):
-    """ Call a variety of metrics to be calculated (Hellenger distance and RMSE, currently) on Box emulator results
+def plot_mae_ts(y_true, y_pred, output_path, model_name):
+    """ Plot and save an average mean absolute error per timestep, across experiments
     Args:
         y_true (np.array): True output data
         y_pred (np.array): Predicted output data
+        output_path (str): Output path top save figure to
+        model_name (str): Model name used to label figure
+    """
+
+    mae = mae_time_series(y_true, y_pred)
+    ax = mae.plot()
+    ax.set_title('{} - MAE per Timestep'.format(model_name))
+    fig = ax.get_figure()
+    fig.savefig('{}{}_mae_timeseries.png'.format(output_path, model_name), bbox_inches='tight')
+
+def ensembled_box_metrics(y_true, y_pred):
+    """ Call a variety of metrics to be calculated (Hellenger distance R2, and RMSE currently) on Box emulator results.
+        If bins were not aggregated, all bins are summed before metrics are calculated.
+    Args:
+        y_true (np.array): True output data
+        y_pred (np.array): Predicted output data
+    Returns:
+        metrics (dictionary): results for 'Precursor', 'Gas', and 'Aerosol' for each type of metric.
     """
     if len(y_true.columns) > 5:
         preds = np.empty((y_pred.shape[0], 3))
@@ -106,7 +142,8 @@ def ensembled_box_metrics(y_true, y_pred):
 
 
 def ensembled_base_metrics(y_true, y_pred, ids, seq_length=1):
-    """ Call a variety of metrics to be calculated (Hellenger distance and RMSE, currently) on Base Model results
+    """ Call a variety of metrics to be calculated (Hellenger distance and RMSE, currently) on Base Model results using
+        all output variables.
     Args:
         y_true (np.array): True output data
         y_pred (np.array): Predicted output data
@@ -119,11 +156,13 @@ def ensembled_base_metrics(y_true, y_pred, ids, seq_length=1):
         y_true = y_true.iloc[:, 1:-1].values
 
     y_pred = y_pred.iloc[:, :-1].values
-    hd = hellinger_distance(y_true, y_pred)
-    rmse = root_mean_squared_error(y_true, y_pred)
+    metrics = {}
 
-    return hd, rmse
+    metrics['RMSE'] = root_mean_squared_error(y_true, y_pred)
+    metrics['R2'] = root_mean_squared_error(y_true, y_pred)
+    metrics['HD'] = hellinger_distance(y_true, y_pred)
 
+    return metrics
 
 def match_true_exps(truth, preds, num_timesteps, seq_length):
     """ Retrieve true values that match the experiments used in previous box emulator run
@@ -131,13 +170,15 @@ def match_true_exps(truth, preds, num_timesteps, seq_length):
         truth (DataFrame): True output data
         preds (DataFrame): Predicted output data
         num_timesteps (int): number of timesteps used in emulator runs to pull equivalent number from true data
+        seq_length (int): Sequence length used in RNN/LSTM model
     """
-    num_seq_ts = num_timesteps - seq_length + 1
     exps = preds['id'].unique()
     true_sub = truth.loc[truth['id'].isin(exps)]
     true_sub = true_sub.groupby('id').apply(lambda x: x.iloc[seq_length - 1: num_timesteps, :]).reset_index(drop=True)
     true_sub = true_sub.sort_values(['id', 'Time [s]'])
 
     preds = preds.sort_values(['id', 'Time [s]']).reset_index(drop=True)
-    preds.columns = [str(x) for x in preds.columns]
+    columns_dict = {x: y for x,y in zip(preds.columns[:-2], truth.columns[1:-1])}
+    preds.rename(columns=columns_dict, inplace=True)
+
     return true_sub, preds
