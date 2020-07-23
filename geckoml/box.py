@@ -3,7 +3,7 @@ import numpy as np
 import gc
 import tensorflow as tf
 from tensorflow.keras.models import load_model
-from dask.distributed import Client, LocalCluster
+
 
 
 class GeckoBoxEmulator(object):
@@ -25,7 +25,7 @@ class GeckoBoxEmulator(object):
 
         return
 
-    def run_ensemble(self, data, num_timesteps, num_exps='all'):
+    def run_ensemble(self, client, data, num_timesteps, num_exps='all'):
         """
         Run an ensemble of GECKO-A experiment emulations distributed over a cluster using dask distributed.
         Args:
@@ -46,12 +46,9 @@ class GeckoBoxEmulator(object):
             sc = self.get_starting_conds(data, x)
             starting_conds.append(sc)
 
-        cluster = LocalCluster(processes=True)
-        client = Client(cluster)
         futures = client.map(self.predict, starting_conds, [num_timesteps]*len(exps), [time_series]*len(exps))
         results = client.gather(futures)
         results_df = pd.concat(results)
-        client.shutdown()
 
         return results_df
 
@@ -154,7 +151,7 @@ class GeckoBoxEmulatorTS(object):
 
         return
 
-    def run_ensemble(self, data, num_timesteps, num_exps='all'):
+    def run_ensemble(self, client, data, num_timesteps, num_exps='all'):
         """
         Run an ensemble of GECKO-A experiment emulations distributed over a cluster using dask distributed.
         Args:
@@ -178,15 +175,12 @@ class GeckoBoxEmulatorTS(object):
             sc = self.get_starting_conds_ts(data_sub)
             starting_conds.append(sc)
 
-        cluster = LocalCluster(processes=True)
-        client = Client(cluster)
         futures = client.map(self.predict_ts, starting_conds, [num_timesteps] * len(exps), [time_series] * len(exps),
                              exps)
         results = client.gather(futures)
         results_df = pd.concat(results)
         results_df.columns = [str(x) for x in results_df.columns]
         results_df.to_parquet('/Users/cbecker/PycharmProjects/gecko-ml/save_out/results_df.parq')
-        client.shutdown()
 
         return results_df
 

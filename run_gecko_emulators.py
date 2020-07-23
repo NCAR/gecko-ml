@@ -7,13 +7,14 @@ from sklearn.preprocessing import StandardScaler, RobustScaler, MaxAbsScaler, Mi
 import tensorflow as tf
 from geckoml.box import GeckoBoxEmulator, GeckoBoxEmulatorTS
 from geckoml.metrics import ensembled_box_metrics, mae_time_series, match_true_exps
+from dask.distributed import Client, LocalCluster
 import os
 
 #os.environ["CUDA_VISIBLE_DEVICES"] = "1"
-#gpus = tf.config.experimental.list_physical_devices('GPU')
-#for device in gpus:
-#    print(device)
-#    tf.config.experimental.set_memory_growth(device, True)
+gpus = tf.config.experimental.list_physical_devices('GPU')
+for device in gpus:
+    print(device)
+    tf.config.experimental.set_memory_growth(device, True)
 
 start = time.time()
 scalers = {"MinMaxScaler": MinMaxScaler,
@@ -39,7 +40,6 @@ def main():
     num_exps = config['num_exps']
     input_cols = config['input_vars']
     output_cols = config['output_vars']
-    #seq_length = config['seq_length']
 
     # Read validation data and scaler objects
     val_in = pd.read_parquet('{}in_val_{}.parquet'.format(output_path, species))
@@ -49,15 +49,15 @@ def main():
     y_scaler = joblib.load(y_scaler)
 
     scaled_val_arr = x_scaler.transform(val_in.iloc[:, 1:-1])
-    #scaled_val_out_arr = y_scaler.transform(val_out.iloc[:, 1:-1])
     scaled_val_in = val_in.copy()
     scaled_val_in[input_cols[1:-1]] = scaled_val_arr
     time_steps = val_in['Time [s]'].nunique()
 
-    #scaled_val_in_ts, scaled_val_out_ts = reshape_data(scaled_val_arr, scaled_val_out_arr,
-     #                                                  seq_length, time_steps)
-
     # Run multiple GECKO experiments in parallel
+
+    cluster = LocalCluster(processes=True)
+    client = Client(cluster)
+
     models, metrics = {}, {}
     for model_type in config["model_configurations"].keys():
 
@@ -66,8 +66,10 @@ def main():
             for model_name in config['model_configurations'][model_type].keys():
                 seq_length = 1
                 nnet_path = '{}{}/'.format(config['output_path'], model_name)
-                mod = GeckoBoxEmulator(neural_net_path=nnet_path, output_scaler=y_scaler, input_scaler=x_scaler)
-                box_preds = mod.run_ensemble(data=scaled_val_in, num_timesteps=time_steps, num_exps=num_exps)
+                mod = GeckoBoxEmulator(neural_net_path=nnet_path, output_scaler=y_scaler,
+                                       input_scaler=x_scaler)
+                box_preds = mod.run_ensemble(client=client, data=scaled_val_in, num_timesteps=time_steps,
+                                             num_exps=num_exps)
                 y_true, y_preds = match_true_exps(truth=val_out, preds=box_preds, num_timesteps=time_steps,
                                                   seq_length=seq_length)
                 metrics[model_name] = ensembled_box_metrics(y_true, y_preds)
@@ -79,13 +81,13 @@ def main():
                 nnet_path = '{}{}/'.format(config['output_path'], model_name)
                 mod = GeckoBoxEmulatorTS(neural_net_path=nnet_path, output_scaler=y_scaler, seq_length=seq_length,
                                          input_cols=input_cols, output_cols=output_cols)
-                box_preds = mod.run_ensemble(data=scaled_val_in, num_timesteps=time_steps, num_exps=num_exps)
+                box_preds = mod.run_ensemble(client=client, data=scaled_val_in, num_timesteps=time_steps,
+                                             num_exps=num_exps)
                 y_true, y_preds = match_true_exps(truth=val_out, preds=box_preds, num_timesteps=time_steps,
                                                   seq_length=seq_length)
                 metrics[model_name] = ensembled_box_metrics(y_true, y_preds)
+    client.shutdown()
 
-   # for model_name, metric in metrics.items():
-    #    print({})
     print(metrics)
 
 
