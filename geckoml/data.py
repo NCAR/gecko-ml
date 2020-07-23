@@ -175,7 +175,7 @@ def reshape_data(x_data, y_data, seq_length, num_timesteps):
     y_new = np.zeros((num_exps * num_seq_ts, num_output))
     for i in range(num_exps):
         for j in range(num_seq_ts):
-            x_new[(i * num_seq_ts) + j, :, :] = x_data[(num_timesteps * i) + j:(num_timesteps * i) + j + seq_length, :]
-            y_new[(i * num_seq_ts) + j, :] = y_data[(num_timesteps * i) + j + seq_length - 1, :]
+            x_new[(i * num_seq_ts) + j] = x_data[(num_timesteps * i) + j:(num_timesteps * i) + j + seq_length]
+            y_new[(i * num_seq_ts) + j] = y_data[(num_timesteps * i) + j + seq_length - 1]
 
     return x_new, y_new
