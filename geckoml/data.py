@@ -43,16 +43,6 @@ def load_data(path, summary_file, species="toluene_kOH", delimiter=", ", experim
     exp_data_merged = pd.merge(exp_data_combined, summary_data, left_on="idnum", right_on="idnum")
     return exp_data_merged, summary_data
 
-def load_combined_data(output_path, species):
-
-    in_train = pd.read_parquet('{}in_train_{}.parquet'.format(output_path, species))
-    out_train = pd.read_parquet('{}out_train_{}.parquet'.format(output_path, species))
-    in_val = pd.read_parquet('{}in_val_{}.parquet'.format(output_path, species))
-    out_val = pd.read_parquet('{}out_val_{}.parquet'.format(output_path, species))
-    in_test = pd.read_parquet('{}in_test_{}.parquet'.format(output_path, species))
-    out_test = pd.read_parquet('{}out_test_{}.parquet'.format(output_path, species))
-
-    return in_train, out_train, in_val, out_val, in_test, out_test
 
 def get_data_serial(file_path, summary_data, bin_prefix, input_vars, output_vars, aggregate_bins):
     """
@@ -160,3 +150,32 @@ def split_data(input_data, output_data, n_splits=2, random_state=8):
     in_test, out_test = remain_in.iloc[test_indx], remain_out.iloc[test_indx]
 
     return in_train, out_train, in_val, out_val, in_test, out_test
+
+
+def reshape_data(x_data, y_data, seq_length, num_timesteps):
+    """
+    Reshape matrix data into sample shape for LSTM training.
+
+    :param x_data: DataFrame containing input features (columns) and time steps (rows).
+    :param y_data: Matrix containing output features (columns) and time steps (rows).
+    :param seq_length: Length of look back time steps for one time step of prediction.
+    :param num_timesteps (int): number of time_steps per experiment.
+
+    :return: Two np.ndarrays, the first of shape (samples, length of sequence,
+        number of features), containing the input data for the LSTM. The second
+        of shape (samples, number of output features) containing the expected output for each input
+        sample.
+    """
+    num_samples, num_features = x_data.shape
+    num_output = y_data.shape[1]
+    num_exps = int(num_samples / num_timesteps)
+    num_seq_ts = num_timesteps - seq_length + 1
+
+    x_new = np.zeros((num_exps * num_seq_ts, seq_length, num_features))
+    y_new = np.zeros((num_exps * num_seq_ts, num_output))
+    for i in range(num_exps):
+        for j in range(num_seq_ts):
+            x_new[(i * num_seq_ts) + j] = x_data[(num_timesteps * i) + j:(num_timesteps * i) + j + seq_length]
+            y_new[(i * num_seq_ts) + j] = y_data[(num_timesteps * i) + j + seq_length - 1]
+
+    return x_new, y_new
