@@ -24,7 +24,7 @@ scalers = {"MinMaxScaler": MinMaxScaler,
 def main():
     # read YAML config as provided arg
     parser = argparse.ArgumentParser()
-    parser.add_argument("-c", "--config", default="agg_config.yml", help="Path to config file")
+    parser.add_argument("-c", "--config", default="apin_O3.yml", help="Path to config file")
     args = parser.parse_args()
     with open(args.config) as config_file:
         config = yaml.load(config_file)
@@ -94,7 +94,7 @@ def main():
 
     # write results
     metrics_str = [f'{key} : {metrics[key]}' for key in metrics]
-    with open('{}base_results.txt'.format(output_path), 'a') as f:
+    with open('{}metrics/{}_base_results.txt'.format(output_path, species), 'a') as f:
         [f.write(f'{st}\n') for st in metrics_str]
         f.write('\n')
 
@@ -103,13 +103,13 @@ def main():
         for model_name in models.keys():
 
             #models[model_name].save_fortran_model(output_path + model_name + ".nc")
-            models[model_name].model.save(output_path + model_name)
+            models[model_name].model.save('{}models/{}_{}'.format(output_path, species, model_name))
 
-        joblib.dump(x_scaler, '{}{}_x.scaler'.format(output_path, species))
-        joblib.dump(y_scaler, '{}{}_y.scaler'.format(output_path, species))
+        joblib.dump(x_scaler, '{}scalers/{}_x.scaler'.format(output_path, species))
+        joblib.dump(y_scaler, '{}scalers/{}_y.scaler'.format(output_path, species))
 
-        in_val.to_parquet('{}in_val_{}.parquet'.format(output_path, species))
-        out_val.to_parquet('{}out_val_{}.parquet'.format(output_path, species))
+        in_val.to_parquet('{}validation_data/{}_in_val.parquet'.format(output_path, species))
+        out_val.to_parquet('{}validation_data/{}_out_val.parquet'.format(output_path, species))
 
     print('Completed in {0:0.1f} seconds'.format(time.time() - start))
 

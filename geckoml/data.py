@@ -66,7 +66,7 @@ def get_data_serial(file_path, summary_data, bin_prefix, input_vars, output_vars
     df.columns = [x.strip() for x in df.columns]
     summary_data.columns = [x.strip() for x in summary_data.columns]
     
-    exp_num = int(re.findall("_Exp(\d+).csv", file_path)[0])
+    exp_num = int(re.findall("_Exp(\d+)*", file_path)[0])
     
     for variable in summary_data.columns:
         
@@ -99,7 +99,7 @@ def combine_data(dir_path, summary_file, aggregate_bins, bin_prefix,
     """
     
     file_list = glob.glob('{}ML2019_{}_ML2019_Exp*'.format(dir_path, species))
-    sorted_filelist = sorted(file_list, key=lambda x:list(map(int, re.findall("_Exp(\d+).csv", x))))
+    sorted_filelist = sorted(file_list, key=lambda x:list(map(int, re.findall("_Exp(\d+)*", x))))
     
     summary = pd.read_csv(dir_path+summary_file, skiprows=3)
     summary.columns = [x.strip() for x in summary.columns]
@@ -175,7 +175,7 @@ def reshape_data(x_data, y_data, seq_length, num_timesteps):
     y_new = np.zeros((num_exps * num_seq_ts, num_output))
     for i in range(num_exps):
         for j in range(num_seq_ts):
-            x_new[(i * num_seq_ts) + j, :, :] = x_data[(num_timesteps * i) + j:(num_timesteps * i) + j + seq_length, :]
-            y_new[(i * num_seq_ts) + j, :] = y_data[(num_timesteps * i) + j + seq_length - 1, :]
+            x_new[(i * num_seq_ts) + j] = x_data[(num_timesteps * i) + j:(num_timesteps * i) + j + seq_length]
+            y_new[(i * num_seq_ts) + j] = y_data[(num_timesteps * i) + j + seq_length - 1]
 
     return x_new, y_new

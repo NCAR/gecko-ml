@@ -86,7 +86,7 @@ def mae_time_series(y_true, y_pred):
 
     return mae
 
-def plot_mae_ts(y_true, y_pred, output_path, model_name):
+def plot_mae_ts(y_true, y_pred, output_path, model_name, species):
     """ Plot and save an average mean absolute error per timestep, across experiments
     Args:
         y_true (np.array): True output data
@@ -99,7 +99,7 @@ def plot_mae_ts(y_true, y_pred, output_path, model_name):
     ax = mae.plot()
     ax.set_title('{} - MAE per Timestep'.format(model_name))
     fig = ax.get_figure()
-    fig.savefig('{}{}_mae_timeseries.png'.format(output_path, model_name), bbox_inches='tight')
+    fig.savefig('{}plots/{}_{}_mae_ts.png'.format(output_path, species, model_name), bbox_inches='tight')
 
 def ensembled_box_metrics(y_true, y_pred):
     """ Call a variety of metrics to be calculated (Hellenger distance R2, and RMSE currently) on Box emulator results.

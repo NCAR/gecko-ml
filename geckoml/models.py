@@ -1,5 +1,5 @@
 from tensorflow.keras.layers import Input, Dense, Dropout, GaussianNoise, Activation, \
-    Concatenate, BatchNormalization, LSTM
+    Concatenate, BatchNormalization, LSTM, Conv1D
 from tensorflow.keras.models import Model
 from tensorflow.keras.regularizers import l2
 from tensorflow.keras.optimizers import Adam, SGD
@@ -320,7 +320,6 @@ class LongShortTermMemoryNetwork(object):
         self.batch_size = batch_size
         self.use_noise = use_noise
         self.noise_sd = noise_sd
-        self.use_dropout = use_dropout
         self.dropout_alpha = dropout_alpha
         self.epochs = epochs
         self.decay = decay
@@ -345,15 +344,14 @@ class LongShortTermMemoryNetwork(object):
 
         nn_input = Input(shape=(seq_input, inputs), name="input")
         nn_model = nn_input
+        nn_model = Conv1D(64, 3, strides=1, padding='valid')(nn_model)
         for h in np.arange(self.hidden_layers):
             if h == np.arange(self.hidden_layers)[-1]:
-                nn_model = LSTM(self.hidden_neurons, return_sequences=True,
+                nn_model = LSTM(self.hidden_neurons, return_sequences=True, dropout=self.dropout_alpha,
                                 name=f"lstm_{h:02d}")(nn_model)
             else:
-                nn_model = LSTM(self.hidden_neurons, return_sequences=True,
+                nn_model = LSTM(self.hidden_neurons, return_sequences=True, dropout=self.dropout_alpha,
                                 name=f"lstm_{h:02d}")(nn_model)
-            if self.use_dropout:
-                nn_model = Dropout(self.dropout_alpha, name=f"dropout_h_{h:02d}")(nn_model)
             if self.use_noise:
                 nn_model = GaussianNoise(self.noise_sd, name=f"ganoise_h_{h:02d}")(nn_model)
         nn_model = LSTM(outputs,
