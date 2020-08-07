@@ -35,6 +35,7 @@ def main():
     num_exps = config['num_exps']
     input_cols = config['input_vars']
     output_cols = config['output_vars']
+    ensemble_members = config['ensemble_members']
 
     # Read validation data and scaler objects
     val_in = pd.read_parquet('{}validation_data/{}_in_val.parquet'.format(output_path, species))
@@ -50,8 +51,9 @@ def main():
 
     # Run multiple GECKO experiments in parallel
     cluster = LocalCluster(processes=True, n_workers=72, threads_per_worker=1)
+    #cluster = LocalCluster()
     client = Client(cluster)
-    models, metrics = {}, {}
+    models, predictions, metrics = {}, {}, {}
     for model_type in config["model_configurations"].keys():
 
         if model_type == 'single_ts_models':
@@ -72,16 +74,21 @@ def main():
 
             for model_name in config['model_configurations'][model_type].keys():
                 seq_length = config['seq_length']
-                nnet_path = '{}models/{}_{}/'.format(output_path, species, model_name)
-                mod = GeckoBoxEmulatorTS(neural_net_path=nnet_path, output_scaler=y_scaler, seq_length=seq_length,
-                                         input_cols=input_cols, output_cols=output_cols)
-                box_preds = mod.run_ensemble(client=client, data=scaled_val_in, num_timesteps=time_steps,
-                                             num_exps=num_exps)
-                y_true, y_preds = match_true_exps(truth=val_out, preds=box_preds, num_timesteps=time_steps,
-                                                  seq_length=seq_length)
-                metrics[model_name] = ensembled_box_metrics(y_true, y_preds)
-                plot_mae_ts(y_true, y_preds, output_path, model_name, species)
+                for member in range(ensemble_members):
 
+                    nnet_path = '{}models/{}_{}_{}/'.format(output_path, species, model_name, member)
+                    mod = GeckoBoxEmulatorTS(neural_net_path=nnet_path, output_scaler=y_scaler, seq_length=seq_length,
+                                             input_cols=input_cols, output_cols=output_cols)
+                    box_preds = mod.run_ensemble(client=client, data=scaled_val_in, num_timesteps=time_steps,
+                                                 num_exps=num_exps)
+                    y_true, y_preds = match_true_exps(truth=val_out, preds=box_preds, num_timesteps=time_steps,
+                                                      seq_length=seq_length)
+                    metrics[model_name + '_{}'.format(member)] = ensembled_box_metrics(y_true, y_preds)
+                    predictions[model_name + '_{}'.format(member)] = y_preds
+                    plot_mae_ts(y_true, y_preds, output_path, model_name, species)
+    import numpy as np
+    np.save('/Users/cbecker/PycharmProjects/gecko-ml/save_out/preds.npy', predictions)
+    np.save('/Users/cbecker/PycharmProjects/gecko-ml/save_out/truth.npy', y_true)
     client.shutdown()
 
     # write metrics to file
