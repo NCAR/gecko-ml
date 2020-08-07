@@ -354,8 +354,7 @@ class LongShortTermMemoryNetwork(object):
                                 name=f"lstm_{h:02d}")(nn_model)
             if self.use_noise:
                 nn_model = GaussianNoise(self.noise_sd, name=f"ganoise_h_{h:02d}")(nn_model)
-        nn_model = LSTM(outputs,
-                         activation=self.output_activation, name=f"lstm_{self.hidden_layers:02d}")(nn_model)
+        nn_model = LSTM(outputs, name=f"lstm_{self.hidden_layers:02d}")(nn_model)
         self.model = Model(nn_input, nn_model)
         if self.optimizer == "adam":
             self.optimizer_obj = Adam(lr=self.lr, beta_1=self.adam_beta_1, beta_2=self.adam_beta_2, decay=self.decay)

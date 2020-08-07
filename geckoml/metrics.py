@@ -1,4 +1,5 @@
 from sklearn.metrics import mean_squared_error
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
@@ -182,3 +183,37 @@ def match_true_exps(truth, preds, num_timesteps, seq_length):
     preds.rename(columns=columns_dict, inplace=True)
 
     return true_sub, preds
+
+
+def plot_ensemble(truth, preds, output_path, species):
+    """ Plot ensemble members, ensemble mean, and truth from 3 randomly selected experiments.
+    """
+    all_exps = truth['id'].unique()
+    exps = np.random.choice(all_exps, 3, replace=False)
+    color = ['r', 'b', 'g']
+    mean_ensemble = pd.concat([x for x in preds.values()]).groupby(level=0).mean()
+    mean_ensemble['id'] = truth['id']
+    fig, axes = plt.subplots(3, 3, figsize=(20, 16), sharex='col', sharey='row',
+                             gridspec_kw={'hspace': 0, 'wspace': 0})
+    fig.suptitle('Ensemble Runs - Dodecane', fontsize=30)
+    for i in range(3):
+        for j in range(3):
+            t = truth[truth['id'] == exps[j]].iloc[:, i + 1].values
+            axes[i, j].plot(t, linestyle='--', color='k', linewidth=2, label='True')
+            if i == 0:
+                axes[i, j].set_title(exps[j], fontsize=22)
+            if j == 0:
+                axes[i, j].set_ylabel(truth.columns[i], fontsize=20)
+            dummy_i = 0
+            for key, value in preds.items():
+                p = preds[key][preds[key]['id'] == exps[j]].iloc[:, i].values
+                if dummy_i == 0:
+                    axes[i, j].plot(p, linewidth=0.3, color=color[j], label='Ensemble Member')
+                else:
+                    axes[i, j].plot(p, linewidth=0.3, color=color[j], label='')
+                dummy_i += 1
+            m = mean_ensemble[mean_ensemble['id'] == exps[j]].iloc[:, i].values
+            axes[i, j].plot(m, color=color[j], linewidth=2, label='Ensemble Mean')
+    for i in range(3):
+        axes[0, i].legend()
+    plt.savefig('{}plots/{}_ensembled_exps.png'.format(output_path, species), bbox_inches='tight')

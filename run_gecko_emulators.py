@@ -3,10 +3,9 @@ import pandas as pd
 import yaml
 import time
 import joblib
-from sklearn.preprocessing import StandardScaler, RobustScaler, MaxAbsScaler, MinMaxScaler
 import tensorflow as tf
 from geckoml.box import GeckoBoxEmulator, GeckoBoxEmulatorTS
-from geckoml.metrics import ensembled_box_metrics, plot_mae_ts, match_true_exps
+from geckoml.metrics import ensembled_box_metrics, plot_mae_ts, match_true_exps, plot_ensemble
 from dask.distributed import Client, LocalCluster
 
 gpus = tf.config.experimental.list_physical_devices('GPU')
@@ -14,17 +13,12 @@ for device in gpus:
     tf.config.experimental.set_memory_growth(device, True)
 
 start = time.time()
-scalers = {"MinMaxScaler": MinMaxScaler,
-           "MaxAbsScaler": MaxAbsScaler,
-           "StandardScaler": StandardScaler,
-           "RobustScaler": RobustScaler}
-
 
 def main():
 
     # read YAML config as provided arg
     parser = argparse.ArgumentParser()
-    parser.add_argument("-c", "--config", default="agg_config.yml", help="Path to config file")
+    parser.add_argument("-c", "--config", default="dodecane_agg.yml", help="Path to config file")
     args = parser.parse_args()
     with open(args.config) as config_file:
         config = yaml.load(config_file)
@@ -86,9 +80,8 @@ def main():
                     metrics[model_name + '_{}'.format(member)] = ensembled_box_metrics(y_true, y_preds)
                     predictions[model_name + '_{}'.format(member)] = y_preds
                     plot_mae_ts(y_true, y_preds, output_path, model_name, species)
-    import numpy as np
-    np.save('/Users/cbecker/PycharmProjects/gecko-ml/save_out/preds.npy', predictions)
-    np.save('/Users/cbecker/PycharmProjects/gecko-ml/save_out/truth.npy', y_true)
+
+    plot_ensemble(truth=y_true, preds=predictions, output_path=output_path, species=species)
     client.shutdown()
 
     # write metrics to file
@@ -97,7 +90,7 @@ def main():
         [f.write(f'{st}\n') for st in metrics_str]
         f.write('\n')
 
-    print('Completed in {0:0.1f} seconds'.format(time.time() - start))
+    print('Completed in {0:0.1f} minutes.'.format((time.time() - start)/60))
     return
 
 

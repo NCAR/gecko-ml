@@ -6,11 +6,11 @@ aggregate_bins: True
 save_models: True
 ensemble_members: 5
 seq_length: 20 # only used with recurrent networks
-scaler_type: "MinMaxScaler"
+scaler_type: "QuantileTransformer"
 bin_prefix: ['Gas [ug/m3]', 'Aerosol [ug_m3]']
 min_exp: 0
 max_exp: 1999
-num_exps: 'all'
+num_exps: 20
 input_vars: [
     'Time [s]',
     'Precursor [ug/m3]',

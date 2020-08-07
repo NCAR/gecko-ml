@@ -2,6 +2,7 @@ from geckoml.models import DenseNeuralNetwork, LongShortTermMemoryNetwork
 from geckoml.data import combine_data, split_data, reshape_data
 from sklearn.preprocessing import StandardScaler, RobustScaler, MaxAbsScaler, MinMaxScaler, QuantileTransformer
 from geckoml.metrics import ensembled_base_metrics
+from sklearn.pipeline import Pipeline
 import tensorflow as tf
 import time
 import joblib
@@ -55,7 +56,12 @@ def main():
         input_data=input_data, output_data=output_data, random_state=seed)
 
     # Rescale training and validation / testing data
-    x_scaler, y_scaler = scalers[scaler_type]((-1, 1)), scalers[scaler_type](-1, 1)
+    if scaler_type == 'QuantileTransformer':
+        x_scaler = Pipeline(steps=[('quant', QuantileTransformer()), ('minmax', MinMaxScaler((-1, 1)))])
+        y_scaler = Pipeline(steps=[('quant', QuantileTransformer()), ('minmax', MinMaxScaler((-1, 1)))])
+    else:
+        x_scaler, y_scaler = scalers[scaler_type](), scalers[scaler_type]()
+
     num_timesteps = in_train['Time [s]'].nunique()
 
     scaled_in_train = x_scaler.fit_transform(in_train.drop(['Time [s]', 'id'], axis=1))
