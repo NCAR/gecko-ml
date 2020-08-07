@@ -45,7 +45,6 @@ def main():
 
     # Run multiple GECKO experiments in parallel
     cluster = LocalCluster(processes=True, n_workers=72, threads_per_worker=1)
-    #cluster = LocalCluster()
     client = Client(cluster)
     models, predictions, metrics = {}, {}, {}
     for model_type in config["model_configurations"].keys():

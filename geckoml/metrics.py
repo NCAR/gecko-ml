@@ -195,7 +195,8 @@ def plot_ensemble(truth, preds, output_path, species):
     mean_ensemble['id'] = truth['id']
     fig, axes = plt.subplots(3, 3, figsize=(20, 16), sharex='col', sharey='row',
                              gridspec_kw={'hspace': 0, 'wspace': 0})
-    fig.suptitle('Ensemble Runs - Dodecane', fontsize=30)
+    fig.suptitle('Ensemble Runs - {}'.format(species), fontsize=30)
+
     for i in range(3):
         for j in range(3):
             t = truth[truth['id'] == exps[j]].iloc[:, i + 1].values
@@ -203,7 +204,7 @@ def plot_ensemble(truth, preds, output_path, species):
             if i == 0:
                 axes[i, j].set_title(exps[j], fontsize=22)
             if j == 0:
-                axes[i, j].set_ylabel(truth.columns[i], fontsize=20)
+                axes[i, j].set_ylabel(truth.columns[i+1], fontsize=20)
             dummy_i = 0
             for key, value in preds.items():
                 p = preds[key][preds[key]['id'] == exps[j]].iloc[:, i].values
@@ -216,4 +217,5 @@ def plot_ensemble(truth, preds, output_path, species):
             axes[i, j].plot(m, color=color[j], linewidth=2, label='Ensemble Mean')
     for i in range(3):
         axes[0, i].legend()
+
     plt.savefig('{}plots/{}_ensembled_exps.png'.format(output_path, species), bbox_inches='tight')

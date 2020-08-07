@@ -167,13 +167,11 @@ class GeckoBoxEmulatorTS(object):
             results_df (DataFrame): A concatenated pandas DataFrame of emulation results.
         """
         np.random.seed(888)
-        #import random
-        #random.seed(8882)
         num_seq_ts = num_timesteps - self.seq_length + 1
         exps = data['id'].unique()
         if num_exps != 'all':
             exps = np.random.choice(exps, num_exps, replace=False)
-            #exps = random.sample(list(exps), num_exps)
+
         starting_conds = []
         time_series = data[data['id'] == exps[0]].iloc[-num_seq_ts:, :]['Time [s]'].copy()
 
