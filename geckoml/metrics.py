@@ -1,4 +1,6 @@
 from sklearn.metrics import mean_squared_error
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd

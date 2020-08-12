@@ -16,11 +16,12 @@ class GeckoBoxEmulator(object):
           input_scaler (str): X Scaler object used on data to train the neural network.
           output_scaler (str): Y Scaler object used on data to train the neural network.
     """
-    def __init__(self, neural_net_path, input_scaler, output_scaler):
+    def __init__(self, neural_net_path, input_scaler, output_scaler, seed=8176):
 
         self.neural_net_path = neural_net_path
         self.input_scaler = input_scaler
         self.output_scaler = output_scaler
+        self.seed = seed
 
         return
 
@@ -144,13 +145,14 @@ class GeckoBoxEmulatorTS(object):
           output_cols (lsit): List of output variables.
     """
 
-    def __init__(self, neural_net_path, output_scaler, seq_length, input_cols, output_cols):
+    def __init__(self, neural_net_path, output_scaler, seq_length, input_cols, output_cols, seed=8176):
 
         self.neural_net_path = neural_net_path
         self.output_scaler = output_scaler
         self.seq_length = seq_length
         self.input_cols = input_cols
         self.output_cols = output_cols
+        self.seed = seed
 
         return
 
@@ -166,7 +168,7 @@ class GeckoBoxEmulatorTS(object):
         Returns:
             results_df (DataFrame): A concatenated pandas DataFrame of emulation results.
         """
-        np.random.seed(888)
+        np.random.seed(self.seed)
         num_seq_ts = num_timesteps - self.seq_length + 1
         exps = data['id'].unique()
         if num_exps != 'all':
@@ -186,7 +188,7 @@ class GeckoBoxEmulatorTS(object):
         results = client.gather(futures)
         results_df = pd.concat(results)
         results_df.columns = [str(x) for x in results_df.columns]
-
+        del(data, data_sub, sc, starting_conds, exps, num_seq_ts)
         return results_df
 
     def predict_ts(self, starting_conds, num_timesteps, time_series, exp):
@@ -200,8 +202,6 @@ class GeckoBoxEmulatorTS(object):
         Returns:
             results (DataFrame): Pandas dataframe of emulated values with time stamps.
         """
-        tf.keras.backend.clear_session()
-        gc.collect()
 
         mod = load_model(self.neural_net_path)
         ts = num_timesteps - self.seq_length + 1
@@ -233,6 +233,10 @@ class GeckoBoxEmulatorTS(object):
         results_df = pd.DataFrame(self.output_scaler.inverse_transform(results))
         results_df['Time [s]'] = time_series.values
         results_df['id'] = exp
+
+        del(mod, results)
+        tf.keras.backend.clear_session()
+        gc.collect()
 
         return results_df
 
