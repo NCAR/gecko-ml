@@ -1,9 +1,10 @@
 from tensorflow.keras.layers import Input, Dense, Dropout, GaussianNoise, Activation, \
-    Concatenate, BatchNormalization, LSTM, Conv1D
+    Concatenate, BatchNormalization, LSTM, Conv1D, AveragePooling1D, MaxPooling1D
 from tensorflow.keras.models import Model
 from tensorflow.keras.regularizers import l2
 from tensorflow.keras.optimizers import Adam, SGD
 import tensorflow.keras.backend as K
+from keras_self_attention import SeqSelfAttention
 import tensorflow as tf
 import numpy as np
 import xarray as xr
@@ -345,13 +346,16 @@ class LongShortTermMemoryNetwork(object):
         nn_input = Input(shape=(seq_input, inputs), name="input")
         nn_model = nn_input
         nn_model = Conv1D(64, 2, strides=2, padding='valid')(nn_model)
+        nn_model = AveragePooling1D(2, strides=1, padding='valid')(nn_model)
         for h in np.arange(self.hidden_layers):
             if h == np.arange(self.hidden_layers)[-1]:
                 nn_model = LSTM(self.hidden_neurons, return_sequences=True, dropout=self.dropout_alpha,
                                 name=f"lstm_{h:02d}")(nn_model)
+                nn_model = SeqSelfAttention()(nn_model)
             else:
                 nn_model = LSTM(self.hidden_neurons, return_sequences=True, dropout=self.dropout_alpha,
                                 name=f"lstm_{h:02d}")(nn_model)
+                nn_model = SeqSelfAttention()(nn_model)
             if self.use_noise:
                 nn_model = GaussianNoise(self.noise_sd, name=f"ganoise_h_{h:02d}")(nn_model)
         nn_model = LSTM(outputs, name=f"lstm_{self.hidden_layers:02d}")(nn_model)
