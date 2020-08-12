@@ -1,17 +1,16 @@
 species: 'dodecane'
 dir_path: '/glade/p/cisl/aiml/gecko/ML2019_dodecane_postproc/'
+output_path: '/glade/work/cbecker/gecko-ml/save_out/'
 summary_file: 'C02000_Exp_List_ML2019_dodecane_v1_LatinHyperCube.csv'
 aggregate_bins: True
 save_models: True
-seq_length: 5
-scaler_type: "MinMaxScaler"
-output_path: '/glade/work/cbecker/gecko-ml/save_out/'
-x_scaler: 'dodecane_x.scaler'
-y_scaler: 'dodecane_y.scaler'
+ensemble_members: 5 # set to 1 for a single run
+seq_length: 20 # only used with recurrent networks
+scaler_type: "QuantileTransformer"
 bin_prefix: ['Gas [ug/m3]', 'Aerosol [ug_m3]']
 min_exp: 0
 max_exp: 1999
-num_exps: 'all'
+num_exps: 20
 input_vars: [
     'Time [s]',
     'Precursor [ug/m3]',
@@ -30,46 +29,21 @@ output_vars: [
     'Gas [ug/m3]',
     'Aerosol [ug_m3]',
     'id']
-
 model_configurations:
-  single_ts_models:
-    dnn_1:
-      hidden_layers: 1
-      hidden_neurons: 100
-      activation: "relu"
-      output_activation: "linear"
-      optimizer: "adam"
-      loss: "mse"
-      lr: 0.001
-      batch_size: 1024
-      use_noise: False
-      noise_sd: 0.01
-      epochs: 10
-      use_dropout: False
-      dropout_alpha: 0.1
-      l2_weight: 0.01
-      sgd_momentum: 0.9
-      adam_beta_1: 0.9
-      adam_beta_2: 0.999
-      decay: 0
-      verbose:  0
-      classifier: False
-
   multi_ts_models:
     lstm_1:
       hidden_layers: 1
-      hidden_neurons: 64
+      hidden_neurons: 100
       activation: "tanh"
       output_activation: "tanh"
       optimizer: "adam"
       loss: "mse"
-      lr: 0.001
-      batch_size: 1024
+      lr: 0.0008
+      batch_size: 2048
       use_noise: False
       noise_sd: 0.01
-      epochs: 10
-      use_dropout: False
-      dropout_alpha: 0.1
+      epochs: 3
+      dropout_alpha: 0.2
       l2_weight: 0.01
       sgd_momentum: 0.9
       adam_beta_1: 0.9

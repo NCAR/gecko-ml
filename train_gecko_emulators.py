@@ -1,7 +1,8 @@
 from geckoml.models import DenseNeuralNetwork, LongShortTermMemoryNetwork
 from geckoml.data import combine_data, split_data, reshape_data
-from sklearn.preprocessing import StandardScaler, RobustScaler, MaxAbsScaler, MinMaxScaler
+from sklearn.preprocessing import StandardScaler, RobustScaler, MaxAbsScaler, MinMaxScaler, QuantileTransformer
 from geckoml.metrics import ensembled_base_metrics
+from sklearn.pipeline import Pipeline
 import tensorflow as tf
 import time
 import joblib
@@ -12,19 +13,20 @@ import yaml
 
 start = time.time()
 seed = 8886
-np.random.seed(seed)
-tf.random.set_seed(seed)
+#np.random.seed(seed)
+#tf.random.set_seed(seed)
 
 scalers = {"MinMaxScaler": MinMaxScaler,
            "MaxAbsScaler": MaxAbsScaler,
            "StandardScaler": StandardScaler,
-           "RobustScaler": RobustScaler}
+           "RobustScaler": RobustScaler,
+           "QuantileTransformer": QuantileTransformer}
 
 
 def main():
     # read YAML config as provided arg
     parser = argparse.ArgumentParser()
-    parser.add_argument("-c", "--config", default="agg_config.yml", help="Path to config file")
+    parser.add_argument("-c", "--config", default="apin_O3.yml", help="Path to config file")
     args = parser.parse_args()
     with open(args.config) as config_file:
         config = yaml.load(config_file)
@@ -43,6 +45,7 @@ def main():
     output_path = config['output_path']
     scaler_type = config['scaler_type']
     seq_length = config['seq_length']
+    ensemble_members = config["ensemble_members"]
 
     # Load GECKO experiment data, split into ML inputs and outputs and persistence outputs
     input_data, output_data = combine_data(dir_path, summary_file, aggregate_bins, bin_prefix,
@@ -53,7 +56,12 @@ def main():
         input_data=input_data, output_data=output_data, random_state=seed)
 
     # Rescale training and validation / testing data
-    x_scaler, y_scaler = scalers[scaler_type](), scalers[scaler_type]()
+    if scaler_type == 'QuantileTransformer':
+        x_scaler = Pipeline(steps=[('quant', QuantileTransformer()), ('minmax', MinMaxScaler((-1, 1)))])
+        y_scaler = Pipeline(steps=[('quant', QuantileTransformer()), ('minmax', MinMaxScaler((-1, 1)))])
+    else:
+        x_scaler, y_scaler = scalers[scaler_type](), scalers[scaler_type]()
+
     num_timesteps = in_train['Time [s]'].nunique()
 
     scaled_in_train = x_scaler.fit_transform(in_train.drop(['Time [s]', 'id'], axis=1))
@@ -86,30 +94,34 @@ def main():
         elif model_type == 'multi_ts_models':
 
             for model_name, model_config in config['model_configurations'][model_type].items():
-                models[model_name] = LongShortTermMemoryNetwork(**model_config)
-                models[model_name].fit(scaled_in_train_ts, scaled_out_train_ts)
-                preds = models[model_name].predict(scaled_in_val_ts)
-                transformed_preds = pd.DataFrame(y_scaler.inverse_transform(preds))
-                metrics[model_name] = ensembled_base_metrics(out_val, transformed_preds, val_id, seq_length)
+
+                for member in range(ensemble_members):
+
+                    models[model_name + '_{}'.format(member)] = LongShortTermMemoryNetwork(**model_config)
+                    models[model_name + '_{}'.format(member)].fit(scaled_in_train_ts, scaled_out_train_ts)
+                    preds = models[model_name + '_{}'.format(member)].predict(scaled_in_val_ts)
+                    transformed_preds = pd.DataFrame(y_scaler.inverse_transform(preds))
+                    metrics[model_name + '_{}'.format(member)] = ensembled_base_metrics(
+                        out_val, transformed_preds, val_id, seq_length)
 
     # write results
     metrics_str = [f'{key} : {metrics[key]}' for key in metrics]
-    with open('{}base_results.txt'.format(output_path), 'a') as f:
+    with open('{}metrics/{}_base_results.txt'.format(output_path, species), 'a') as f:
         [f.write(f'{st}\n') for st in metrics_str]
         f.write('\n')
 
     # Save ML models, scaler objects, and validation
     if save_models:
         for model_name in models.keys():
-
             #models[model_name].save_fortran_model(output_path + model_name + ".nc")
-            models[model_name].model.save(output_path + model_name)
+            models[model_name].model.save('{}models/{}_{}'.format(
+                output_path, species, model_name))
 
-        joblib.dump(x_scaler, '{}{}_x.scaler'.format(output_path, species))
-        joblib.dump(y_scaler, '{}{}_y.scaler'.format(output_path, species))
+        joblib.dump(x_scaler, '{}scalers/{}_x.scaler'.format(output_path, species))
+        joblib.dump(y_scaler, '{}scalers/{}_y.scaler'.format(output_path, species))
 
-        in_val.to_parquet('{}in_val_{}.parquet'.format(output_path, species))
-        out_val.to_parquet('{}out_val_{}.parquet'.format(output_path, species))
+        in_val.to_parquet('{}validation_data/{}_in_val.parquet'.format(output_path, species))
+        out_val.to_parquet('{}validation_data/{}_out_val.parquet'.format(output_path, species))
 
     print('Completed in {0:0.1f} seconds'.format(time.time() - start))
 
