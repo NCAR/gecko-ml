@@ -50,7 +50,8 @@ class GeckoBoxEmulator(object):
         futures = client.map(self.predict, starting_conds, [num_timesteps]*len(exps), [time_series]*len(exps))
         results = client.gather(futures)
         results_df = pd.concat(results)
-
+        del(exps, starting_conds, time_series, sc, results)
+        client.cancel(futures)
         return results_df
 
     def predict(self, starting_conds, num_timesteps, time_series, starting_ts=0, seq_length=1):
@@ -66,8 +67,7 @@ class GeckoBoxEmulator(object):
         Returns:
             results (DataFrame): Pandas dataframe of emulated values with time stamps.
         """
-        tf.keras.backend.clear_session()
-        gc.collect()
+
         mod = load_model(self.neural_net_path)
 
         scaled_input = self.input_scaler.transform(starting_conds.iloc[starting_ts:seq_length, 1:-1])
@@ -93,6 +93,9 @@ class GeckoBoxEmulator(object):
         results['id'] = exp
         results['Time [s]'] = time_series
         results = results.reset_index(drop=True)
+        del(mod)
+        tf.keras.backend.clear_session()
+        gc.collect()
 
         return results
 
@@ -188,7 +191,8 @@ class GeckoBoxEmulatorTS(object):
         results = client.gather(futures)
         results_df = pd.concat(results)
         results_df.columns = [str(x) for x in results_df.columns]
-        del(data, data_sub, sc, starting_conds, exps, num_seq_ts)
+        del(data, data_sub, sc, starting_conds, exps, num_seq_ts, results)
+        client.cancel(futures)
         return results_df
 
     def predict_ts(self, starting_conds, num_timesteps, time_series, exp):
