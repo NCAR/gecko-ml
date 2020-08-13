@@ -43,19 +43,16 @@ def load_data(path, summary_file, species="toluene_kOH", delimiter=", ", experim
     exp_data_merged = pd.merge(exp_data_combined, summary_data, left_on="idnum", right_on="idnum")
     return exp_data_merged, summary_data
 
-def add_diurnal_signal(x_data, y_data):
+def add_diurnal_signal(x_data):
     """
     Apply Function to static temperature to add +- 4 [K] diurnal signal (dependent of time [s] of timeseries).
     :param x_data: Pre-scaled/normalized input data (Pandas DF).
-    :param y_data: Pre-scaled/normalized output data (Pandas DF).
     :return: Same dfs with function applied to temperature feature.
     """
     x_data['temperature (K)'] = x_data['temperature (K)'] + 4.0 * np.sin(
         (x_data['Time [s]'] * 7.2722e-5 + (np.pi / 2.0 - 7.2722e-5 * 64800.0)))
-    y_data['temperature (K)'] = y_data['temperature (K)'] + 4.0 * np.sin(
-        (y_data['Time [s]'] * 7.2722e-5 + (np.pi / 2.0 - 7.2722e-5 * 64800.0)))
 
-    return x_data, y_data
+    return x_data
 
 def get_data_serial(file_path, summary_data, bin_prefix, input_vars, output_vars, aggregate_bins):
     """
@@ -130,8 +127,10 @@ def combine_data(dir_path, summary_file, aggregate_bins, bin_prefix,
     df_out = ddf_out.compute(scheduler='processes').reset_index() 
 
     del df_in['index'], df_out['index']
-
-    df_in, df_out = add_diurnal_signal(df_in, df_out)
+    print(df_in.columns)
+    print(df_out.columns)
+    print()
+    df_in = add_diurnal_signal(df_in)
         
     return df_in, df_out
 
