@@ -37,6 +37,7 @@ class GeckoBoxEmulator(object):
         Returns:
             results_df (DataFrame): A concatenated pandas DataFrame of emulation results.
         """
+        np.random.seed(self.seed)
         exps = data['id'].unique()
         if num_exps != 'all':
             exps = np.random.choice(exps, num_exps, replace=False)
