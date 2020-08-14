@@ -54,6 +54,22 @@ def add_diurnal_signal(x_data):
 
     return x_data
 
+
+def get_tendencies(df, input_cols):
+    """
+    Transform dataframe to time tendencies rather than actual values. Preserves static environmental values.
+    :param df: Pre-scaled input dataframe.
+    :param input_cols: Input columns to be transformed (should include 'id' and 'Time' for indexing).
+    :return: Pandas dataframe with input columns transformed to tendencies (Removes the first sample of each Exp).
+    """
+    df_copy = df.copy()
+    dummy_df = df[input_cols].drop(['Time [s]'], axis=1).groupby('id').diff().reset_index(drop=True)
+    df_copy.loc[:, ~df_copy.columns.isin(['Time [s]', 'id'])] = dummy_df
+    df_copy.loc[:, ~df_copy.columns.isin(input_cols)] = df.loc[:, ~df.columns.isin(input_cols)]
+    dff = df_copy.groupby('id').apply(lambda x: x.iloc[1:, :]).reset_index(drop=True)
+
+    return dff
+
 def get_data_serial(file_path, summary_data, bin_prefix, input_vars, output_vars, aggregate_bins):
     """
         Load an experiment file based on a summary file; combine data from summary into experiment file
