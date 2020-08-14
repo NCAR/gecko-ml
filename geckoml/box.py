@@ -39,6 +39,7 @@ class GeckoBoxEmulator(object):
         """
         np.random.seed(self.seed)
         exps = data['id'].unique()
+
         if num_exps != 'all':
             exps = np.random.choice(exps, num_exps, replace=False)
 
@@ -51,8 +52,9 @@ class GeckoBoxEmulator(object):
         futures = client.map(self.predict, starting_conds, [num_timesteps]*len(exps), [time_series]*len(exps))
         results = client.gather(futures)
         results_df = pd.concat(results)
-        del(exps, starting_conds, time_series, sc, results)
         client.cancel(futures)
+        client.cancel(results)
+        del(exps, starting_conds, time_series, sc, data, results)
         return results_df
 
     def predict(self, starting_conds, num_timesteps, time_series, starting_ts=0, seq_length=1):
@@ -192,8 +194,10 @@ class GeckoBoxEmulatorTS(object):
         results = client.gather(futures)
         results_df = pd.concat(results)
         results_df.columns = [str(x) for x in results_df.columns]
-        del(data, data_sub, sc, starting_conds, exps, num_seq_ts, results)
         client.cancel(futures)
+        client.cancel(results)
+        del(data, client, data_sub, sc, starting_conds, exps, num_seq_ts, results)
+
         return results_df
 
     def predict_ts(self, starting_conds, num_timesteps, time_series, exp):

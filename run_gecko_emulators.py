@@ -79,9 +79,9 @@ def main():
                     metrics[model_name + '_{}'.format(member)] = ensembled_box_metrics(y_true, y_preds)
                     predictions[model_name + '_{}'.format(member)] = y_preds
                     plot_mae_ts(y_true, y_preds, output_path, model_name, species)
-
+                    if member != (ensemble_members - 1):
+                        del(box_preds, y_true, y_preds, nnet_path, mod)
     plot_ensemble(truth=y_true, preds=predictions, output_path=output_path, species=species)
-    client.shutdown()
 
     # write metrics to file
     metrics_str = [f'{key} : {metrics[key]}' for key in metrics]

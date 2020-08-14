@@ -127,9 +127,6 @@ def combine_data(dir_path, summary_file, aggregate_bins, bin_prefix,
     df_out = ddf_out.compute(scheduler='processes').reset_index() 
 
     del df_in['index'], df_out['index']
-    print(df_in.columns)
-    print(df_out.columns)
-    print()
     df_in = add_diurnal_signal(df_in)
         
     return df_in, df_out
