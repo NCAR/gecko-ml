@@ -3,6 +3,9 @@ import numpy as np
 import gc
 import tensorflow as tf
 from tensorflow.keras.models import load_model
+from tensorflow.python.framework.ops import disable_eager_execution
+
+disable_eager_execution()
 
 
 class GeckoBoxEmulator(object):
@@ -51,10 +54,9 @@ class GeckoBoxEmulator(object):
 
         futures = client.map(self.predict, starting_conds, [num_timesteps]*len(exps), [time_series]*len(exps))
         results = client.gather(futures)
+        del futures
         results_df = pd.concat(results)
-        client.cancel(futures)
-        client.cancel(results)
-        del(exps, starting_conds, time_series, sc, data, results)
+
         return results_df
 
     def predict(self, starting_conds, num_timesteps, time_series, starting_ts=0, seq_length=1):
@@ -96,7 +98,7 @@ class GeckoBoxEmulator(object):
         results['id'] = exp
         results['Time [s]'] = time_series
         results = results.reset_index(drop=True)
-        del(mod)
+        del mod
         tf.keras.backend.clear_session()
         gc.collect()
 
@@ -192,11 +194,9 @@ class GeckoBoxEmulatorTS(object):
         futures = client.map(self.predict_ts, starting_conds, [num_timesteps] * len(exps), [time_series] * len(exps),
                              exps)
         results = client.gather(futures)
+        del futures
         results_df = pd.concat(results)
         results_df.columns = [str(x) for x in results_df.columns]
-        client.cancel(futures)
-        client.cancel(results)
-        del(data, client, data_sub, sc, starting_conds, exps, num_seq_ts, results)
 
         return results_df
 
@@ -243,7 +243,7 @@ class GeckoBoxEmulatorTS(object):
         results_df['Time [s]'] = time_series.values
         results_df['id'] = exp
 
-        del(mod, results)
+        del mod
         tf.keras.backend.clear_session()
         gc.collect()
 

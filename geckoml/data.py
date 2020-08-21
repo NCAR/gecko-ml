@@ -46,8 +46,10 @@ def load_data(path, summary_file, species="toluene_kOH", delimiter=", ", experim
 def add_diurnal_signal(x_data):
     """
     Apply Function to static temperature to add +- 4 [K] diurnal signal (dependent of time [s] of timeseries).
-    :param x_data: Pre-scaled/normalized input data (Pandas DF).
-    :return: Same dfs with function applied to temperature feature.
+    Args:
+        x_data: Pre-scaled/normalized input data (Pandas DF).
+
+    Returns: Same df with function applied to temperature feature.
     """
     x_data['temperature (K)'] = x_data['temperature (K)'] + 4.0 * np.sin(
         (x_data['Time [s]'] * 7.2722e-5 + (np.pi / 2.0 - 7.2722e-5 * 64800.0)))
@@ -57,10 +59,12 @@ def add_diurnal_signal(x_data):
 
 def get_tendencies(df, input_cols):
     """
-    Transform dataframe to time tendencies rather than actual values. Preserves static environmental values.
-    :param df: Pre-scaled input dataframe.
-    :param input_cols: Input columns to be transformed (should include 'id' and 'Time' for indexing).
-    :return: Pandas dataframe with input columns transformed to tendencies (Removes the first sample of each Exp).
+     Transform dataframe to time tendencies rather than actual values. Preserves static environmental values.
+    Args:
+        df: Pre-scaled input dataframe.
+        input_cols: Input columns to be transformed (should include 'id' and 'Time' for indexing).
+
+    Returns: Pandas dataframe with input columns transformed to tendencies (Removes the first sample of each Exp).
     """
     df_copy = df.copy()
     dummy_df = df[input_cols].drop(['Time [s]'], axis=1).groupby('id').diff().reset_index(drop=True)
@@ -112,7 +116,7 @@ def get_data_serial(file_path, summary_data, bin_prefix, input_vars, output_vars
 def combine_data(dir_path, summary_file, aggregate_bins, bin_prefix,
                  input_vars, output_vars, min_exp, max_exp, species):
     """
-        Distribute get_serial_data() using dask to parallelize tasks and concatenate dataframes 
+        Distribute get_serial_data() using dask to parallelize tasks and concatenate dataframes
     
     Args:
         summary_path: Full path of summary file
@@ -149,8 +153,8 @@ def combine_data(dir_path, summary_file, aggregate_bins, bin_prefix,
 
 def split_data(input_data, output_data, n_splits=2, random_state=8):
     """
-        Split data, by experiment, into training/validation/testing sets for both input/output dataframes
-    
+    Split data, by experiment, into training/validation/testing sets for both input/output dataframes.
+
     Args:
         input_data: Complete input dataframe to process
         output_data: Complete output dataframe to process
@@ -183,12 +187,13 @@ def reshape_data(x_data, y_data, seq_length, num_timesteps):
     """
     Reshape matrix data into sample shape for LSTM training.
 
-    :param x_data: DataFrame containing input features (columns) and time steps (rows).
-    :param y_data: Matrix containing output features (columns) and time steps (rows).
-    :param seq_length: Length of look back time steps for one time step of prediction.
-    :param num_timesteps (int): number of time_steps per experiment.
+    Args:
+        x_data: DataFrame containing input features (columns) and time steps (rows).
+        y_data: Matrix containing output features (columns) and time steps (rows).
+        seq_length: Length of look back time steps for one time step of prediction.
+        num_timesteps: Number of time_steps per experiment.
 
-    :return: Two np.ndarrays, the first of shape (samples, length of sequence,
+    Returns: Two np.ndarrays, the first of shape (samples, length of sequence,
         number of features), containing the input data for the LSTM. The second
         of shape (samples, number of output features) containing the expected output for each input
         sample.
