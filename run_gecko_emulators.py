@@ -8,10 +8,6 @@ from geckoml.box import GeckoBoxEmulator, GeckoBoxEmulatorTS
 from geckoml.metrics import ensembled_box_metrics, plot_mae_ts, match_true_exps, plot_ensemble
 from dask.distributed import Client, LocalCluster
 
-gpus = tf.config.experimental.list_physical_devices('GPU')
-for device in gpus:
-    tf.config.experimental.set_memory_growth(device, True)
-
 start = time.time()
 
 def main():
@@ -81,7 +77,6 @@ def main():
                     plot_mae_ts(y_true, y_preds, output_path, model_name, species)
 
     plot_ensemble(truth=y_true, preds=predictions, output_path=output_path, species=species)
-    client.shutdown()
 
     # write metrics to file
     metrics_str = [f'{key} : {metrics[key]}' for key in metrics]

@@ -3,6 +3,9 @@ import numpy as np
 import gc
 import tensorflow as tf
 from tensorflow.keras.models import load_model
+from tensorflow.python.framework.ops import disable_eager_execution
+
+disable_eager_execution()
 
 
 class GeckoBoxEmulator(object):
@@ -37,7 +40,9 @@ class GeckoBoxEmulator(object):
         Returns:
             results_df (DataFrame): A concatenated pandas DataFrame of emulation results.
         """
+        np.random.seed(self.seed)
         exps = data['id'].unique()
+
         if num_exps != 'all':
             exps = np.random.choice(exps, num_exps, replace=False)
 
@@ -49,6 +54,7 @@ class GeckoBoxEmulator(object):
 
         futures = client.map(self.predict, starting_conds, [num_timesteps]*len(exps), [time_series]*len(exps))
         results = client.gather(futures)
+        del futures
         results_df = pd.concat(results)
 
         return results_df
@@ -66,8 +72,7 @@ class GeckoBoxEmulator(object):
         Returns:
             results (DataFrame): Pandas dataframe of emulated values with time stamps.
         """
-        tf.keras.backend.clear_session()
-        gc.collect()
+
         mod = load_model(self.neural_net_path)
 
         scaled_input = self.input_scaler.transform(starting_conds.iloc[starting_ts:seq_length, 1:-1])
@@ -93,6 +98,9 @@ class GeckoBoxEmulator(object):
         results['id'] = exp
         results['Time [s]'] = time_series
         results = results.reset_index(drop=True)
+        del mod
+        tf.keras.backend.clear_session()
+        gc.collect()
 
         return results
 
@@ -186,9 +194,10 @@ class GeckoBoxEmulatorTS(object):
         futures = client.map(self.predict_ts, starting_conds, [num_timesteps] * len(exps), [time_series] * len(exps),
                              exps)
         results = client.gather(futures)
+        del futures
         results_df = pd.concat(results)
         results_df.columns = [str(x) for x in results_df.columns]
-        del(data, data_sub, sc, starting_conds, exps, num_seq_ts)
+
         return results_df
 
     def predict_ts(self, starting_conds, num_timesteps, time_series, exp):
@@ -234,7 +243,7 @@ class GeckoBoxEmulatorTS(object):
         results_df['Time [s]'] = time_series.values
         results_df['id'] = exp
 
-        del(mod, results)
+        del mod
         tf.keras.backend.clear_session()
         gc.collect()
 
