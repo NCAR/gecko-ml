@@ -11,7 +11,8 @@ requirements = ["numpy",
                 "netcdf4",
                 "matplotlib",
                 "scikit-learn",
-                "dask distributed",
+                "dask",
+                "distributed",
                 "keras_self_attention"]
 
 setup(name="gecko-ml",
