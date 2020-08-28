@@ -147,8 +147,7 @@ def combine_data(dir_path, summary_file, aggregate_bins, bin_prefix,
     df_out = ddf_out.compute(scheduler='processes').reset_index() 
 
     del df_in['index'], df_out['index']
-    df_in = add_diurnal_signal(df_in)
-        
+
     return df_in, df_out
 
 def split_data(input_data, output_data, n_splits=2, random_state=8):
@@ -178,7 +177,9 @@ def split_data(input_data, output_data, n_splits=2, random_state=8):
                                     random_state=random_state).split(remain_in, groups=remain_in['id']))
      
     in_val, out_val = remain_in.iloc[val_indx], remain_out.iloc[val_indx]
+    in_val = add_diurnal_signal(in_val)
     in_test, out_test = remain_in.iloc[test_indx], remain_out.iloc[test_indx]
+    in_test = add_diurnal_signal(in_test)
 
     return in_train, out_train, in_val, out_val, in_test, out_test
 

@@ -6,9 +6,9 @@
 #SBATCH --partition=dav
 #SBATCH --gres=gpu:v100:1
 #SBATCH --mem=128G
-#SBATCH -o ./logs/train.txt
-#SBATCH -e ./logs/train.txt
+#SBATCH -o ./train.txt
+#SBATCH -e ./train.txt
 module load ncarenv/1.3 gnu/8.3.0 openmpi/3.1.4 python/3.7.5 cuda/10.1
 ncar_pylib ncar_20191211
 cd /glade/work/$USER/gecko-ml/
-python -u train_gecko_emulators.py -c ./config/dodecane_agg.yml >& ./logs/train.txt
+python -u train_gecko_emulators.py -c ./config/dodecane_agg.yml >& ./train.txt
