@@ -187,7 +187,7 @@ def match_true_exps(truth, preds, num_timesteps, seq_length):
     return true_sub, preds
 
 
-def plot_ensemble(truth, preds, output_path, species):
+def plot_ensemble(truth, preds, output_path, species, model_name):
     """ Plot ensemble members, ensemble mean, and truth from 3 randomly selected experiments.
     """
     all_exps = truth['id'].unique()
@@ -197,7 +197,7 @@ def plot_ensemble(truth, preds, output_path, species):
     mean_ensemble['id'] = truth['id']
     fig, axes = plt.subplots(3, 3, figsize=(20, 16), sharex='col', sharey='row',
                              gridspec_kw={'hspace': 0, 'wspace': 0})
-    fig.suptitle('Ensemble Runs - {}'.format(species), fontsize=30)
+    fig.suptitle('Ensemble Runs - {} - {}'.format(species, model_name), fontsize=30)
 
     for i in range(3):
         for j in range(3):
@@ -220,4 +220,4 @@ def plot_ensemble(truth, preds, output_path, species):
     for i in range(3):
         axes[0, i].legend()
 
-    plt.savefig('{}plots/{}_ensembled_exps.png'.format(output_path, species), bbox_inches='tight')
+    plt.savefig('{}plots/{}_{}_ensembled_exps.png'.format(output_path, species, model_name), bbox_inches='tight')
