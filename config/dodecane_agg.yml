@@ -60,12 +60,12 @@ model_configurations:
       output_activation: "tanh"
       optimizer: "adam"
       loss: "mse"
-      lr: 0.00005
+      lr: 0.0001
       batch_size: 2048
       use_noise: False
       noise_sd: 0.01
       epochs: 10
-      dropout_alpha: 0.1
+      dropout_alpha: 0.2
       l2_weight: 0.01
       sgd_momentum: 0.9
       adam_beta_1: 0.9

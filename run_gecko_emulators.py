@@ -1,3 +1,6 @@
+import argparse
+import pandas as pd
+import yaml
 import time
 import joblib
 import tensorflow as tf
@@ -5,6 +8,7 @@ from geckoml.data import get_tendencies
 from geckoml.box import GeckoBoxEmulator, GeckoBoxEmulatorTS
 from geckoml.metrics import ensembled_box_metrics, plot_mae_ts, match_true_exps, plot_ensemble
 from dask.distributed import Client, LocalCluster
+
 
 start = time.time()
 
@@ -39,12 +43,11 @@ def main():
     time_steps = scaled_val_in['Time [s]'].nunique()
 
     # Run multiple GECKO experiments in parallel
-    #cluster = LocalCluster(processes=True, n_workers=50, threads_per_worker=1)
-    cluster = LocalCluster()
+    cluster = LocalCluster(processes=True, n_workers=50, threads_per_worker=1)
     client = Client(cluster)
     models, predictions, metrics = {}, {}, {}
     for model_type in config["model_configurations"].keys():
-        if model_type == 'single_ts_modelss':
+        if model_type == 'single_ts_models':
             for model_name in config['model_configurations'][model_type].keys():
                 seq_length = 1
                 nnet_path = '{}models/{}_{}/'.format(output_path, species, model_name)
@@ -60,8 +63,6 @@ def main():
             for model_name in config['model_configurations'][model_type].keys():
                 seq_length = config['seq_length']
                 for member in range(ensemble_members):
-                    # nnet_path = '{}models/{}_{}_{}/'.format(output_path, species, model_name, member)
-                    nnet_path = '/glade/u/home/cbecker/saved_model_test3/'
                     nnet_path = '{}models/{}_{}_{}/'.format(output_path, species, model_name, member)
                     mod = GeckoBoxEmulatorTS(neural_net_path=nnet_path, output_scaler=y_scaler, seq_length=seq_length,
                                              input_cols=input_cols, output_cols=output_cols)
