@@ -57,7 +57,7 @@ def add_diurnal_signal(x_data):
     return x_data
 
 
-def get_tendencies(df, input_cols):
+def get_tendencies(df, output_cols):
     """
      Transform dataframe to time tendencies rather than actual values. Preserves static environmental values.
     Args:
@@ -67,9 +67,9 @@ def get_tendencies(df, input_cols):
     Returns: Pandas dataframe with input columns transformed to tendencies (Removes the first sample of each Exp).
     """
     df_copy = df.copy()
-    dummy_df = df[input_cols].drop(['Time [s]'], axis=1).groupby('id').diff().reset_index(drop=True)
-    df_copy.loc[:, ~df_copy.columns.isin(['Time [s]', 'id'])] = dummy_df
-    df_copy.loc[:, ~df_copy.columns.isin(input_cols)] = df.loc[:, ~df.columns.isin(input_cols)]
+    dummy_df = df[output_cols].drop(['Time [s]'], axis=1).groupby('id').diff().reset_index(drop=True)
+    df_copy[output_cols[1:-1]] = dummy_df.values
+    df_copy.loc[:, ~df_copy.columns.isin(output_cols)] = df.loc[:, ~df.columns.isin(output_cols)]
     dff = df_copy.groupby('id').apply(lambda x: x.iloc[1:, :]).reset_index(drop=True)
 
     return dff
