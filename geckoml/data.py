@@ -74,6 +74,23 @@ def get_tendencies(df, input_cols):
 
     return dff
 
+def convert_to_values(original, preds, output_cols, seq_length=1):
+    """
+    Convert tendencies back to actual values.
+    Args:
+        original: Original df that was used to create tendencies
+        preds: Model predictions.
+        output_cols: Output columns from config.
+    Returns: Converted Dataframe.
+    """
+    original = original[output_cols].groupby('id').apply(lambda x: x.iloc[seq_length - 1:-1, :]).reset_index(drop=True)
+    original = original.loc[:, original.columns.isin(output_cols)].drop(['Time [s]', 'id'], axis=1).reset_index(
+        drop=True)
+    preds.columns = output_cols[1:-1]
+    converted = original.add(preds)[output_cols[1:-1]]
+
+    return converted
+
 def get_data_serial(file_path, summary_data, bin_prefix, input_vars, output_vars, aggregate_bins):
     """
         Load an experiment file based on a summary file; combine data from summary into experiment file

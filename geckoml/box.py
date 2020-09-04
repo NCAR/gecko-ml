@@ -164,7 +164,7 @@ class GeckoBoxEmulatorTS(object):
 
         return
 
-    def run_ensemble(self, client, data, num_timesteps, num_exps='all'):
+    def run_ensemble(self, client, data, out_data, num_timesteps, num_exps='all'):
         """
         Run an ensemble of GECKO-A experiment emulations distributed over a cluster using dask distributed.
         Args:
@@ -182,17 +182,21 @@ class GeckoBoxEmulatorTS(object):
         if num_exps != 'all':
             exps = np.random.choice(exps, num_exps, replace=False)
 
-        starting_conds = []
+        starting_conds, temps, initial_out_values = [], [], []
         time_series = data[data['id'] == exps[0]].iloc[-num_seq_ts:, :]['Time [s]'].copy()
 
         for x in exps:
             data_sub = data[data['id'] == x].iloc[:, 1:-1].copy()
             data_sub.columns = self.input_cols[1:-1]
             sc = self.get_starting_conds_ts(data_sub)
+            temperature_ts = data_sub['temperature (K)'][self.seq_length:].values
+            iv = out_data[out_data['id'] == x].iloc[self.seq_length - 1, 1:-1].values
             starting_conds.append(sc)
+            initial_out_values.append(iv)
+            temps.append(temperature_ts)
 
-        futures = client.map(self.predict_ts, starting_conds, [num_timesteps] * len(exps), [time_series] * len(exps),
-                             exps)
+        futures = client.map(self.predict_ts, starting_conds, [num_timesteps] * len(exps), initial_out_values,
+                             temps, [time_series] * len(exps), exps)
         results = client.gather(futures)
         del futures
         results_df = pd.concat(results)
@@ -200,7 +204,7 @@ class GeckoBoxEmulatorTS(object):
 
         return results_df
 
-    def predict_ts(self, starting_conds, num_timesteps, time_series, exp):
+    def predict_ts(self, starting_conds, num_timesteps, initial_val, temps, time_series, exp):
         """ Run emulation of single experiment given initial conditions.
         Args:
             starting_conds (DataFrame): DataFrame of initial conditions.
@@ -223,23 +227,28 @@ class GeckoBoxEmulatorTS(object):
             if i == 0:
 
                 pred = mod.predict(starting_conds)
-                results[i, :] = pred
+                transformed_pred = self.output_scaler.inverse_transform(pred)
+                results[i, :] = transformed_pred + initial_val
                 new_input_single[:, :, -6:] = static_input
                 new_input_single[:, :, :-6] = pred
+                new_input_single[:, :, 3] = temps[i]
                 x = starting_conds[:, 1:, :]
                 new_input = np.concatenate([x, new_input_single], axis=1)
 
             else:
 
                 pred = mod.predict(new_input)
-                results[i, :] = pred
+                transformed_pred = self.output_scaler.inverse_transform(pred)
+                results[i, :] = transformed_pred + results[i-1, :]
 
-                new_input_single[:, :, -6:] = static_input
-                new_input_single[:, :, :-6] = pred
-                x = new_input[:, 1:, :]
-                new_input = np.concatenate([x, new_input_single], axis=1)
+                if i < range(ts)[-1]:
+                    new_input_single[:, :, -6:] = static_input
+                    new_input_single[:, :, :-6] = pred
+                    new_input_single[:, :, 3] = temps[i]
+                    x = new_input[:, 1:, :]
+                    new_input = np.concatenate([x, new_input_single], axis=1)
 
-        results_df = pd.DataFrame(self.output_scaler.inverse_transform(results))
+        results_df = pd.DataFrame(results)
         results_df['Time [s]'] = time_series.values
         results_df['id'] = exp
 

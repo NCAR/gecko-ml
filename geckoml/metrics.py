@@ -162,7 +162,7 @@ def ensembled_base_metrics(y_true, y_pred, ids, seq_length=1):
     metrics = {}
 
     metrics['RMSE'] = root_mean_squared_error(y_true, y_pred)
-    metrics['R2'] = root_mean_squared_error(y_true, y_pred)
+    #metrics['R2'] = root_mean_squared_error(y_true, y_pred)
     metrics['HD'] = hellinger_distance(y_true, y_pred)
 
     return metrics

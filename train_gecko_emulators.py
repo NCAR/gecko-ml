@@ -1,5 +1,5 @@
 from geckoml.models import DenseNeuralNetwork, LongShortTermMemoryNetwork
-from geckoml.data import combine_data, split_data, reshape_data
+from geckoml.data import combine_data, split_data, reshape_data, convert_to_values, get_tendencies
 from sklearn.preprocessing import StandardScaler, RobustScaler, MaxAbsScaler, MinMaxScaler, QuantileTransformer
 from geckoml.metrics import ensembled_base_metrics
 from sklearn.pipeline import Pipeline
@@ -60,6 +60,10 @@ def main():
     in_train, out_train, in_val, out_val, in_test, out_test = split_data(
         input_data=input_data, output_data=output_data, random_state=seed)
 
+    # convert to tendencies
+    in_train_t, out_train_t, in_val_t, out_val_t = [
+        get_tendencies(x, y) for x, y in zip([in_train, out_train, in_val, out_val], [output_vars] * 4)]
+
     # Rescale training and validation / testing data
     if scaler_type == 'QuantileTransformer':
         x_scaler = Pipeline(steps=[('quant', QuantileTransformer()), ('minmax', MinMaxScaler((-1, 1)))])
@@ -67,15 +71,15 @@ def main():
     else:
         x_scaler, y_scaler = scalers[scaler_type](), scalers[scaler_type]()
 
-    num_timesteps = in_train['Time [s]'].nunique()
+    num_timesteps = in_train_t['Time [s]'].nunique()
 
-    scaled_in_train = x_scaler.fit_transform(in_train.drop(['Time [s]', 'id'], axis=1))
-    scaled_out_train = y_scaler.fit_transform(out_train.drop(['Time [s]', 'id'], axis=1))
-    scaled_in_val = x_scaler.transform(in_val.drop(['Time [s]', 'id'], axis=1))
-    scaled_out_val = y_scaler.transform(out_val.drop(['Time [s]', 'id'], axis=1))
+    scaled_in_train = x_scaler.fit_transform(in_train_t.drop(['Time [s]', 'id'], axis=1))
+    scaled_out_train = y_scaler.fit_transform(out_train_t.drop(['Time [s]', 'id'], axis=1))
+    scaled_in_val = x_scaler.transform(in_val_t.drop(['Time [s]', 'id'], axis=1))
+    scaled_out_val = y_scaler.transform(out_val_t.drop(['Time [s]', 'id'], axis=1))
 
-    val_ids = in_val['id'].values
-    val_id = in_val.groupby('id').apply(lambda x: x.iloc[(seq_length - 1):, :])['id'].values
+    val_ids = in_val_t['id'].values
+    val_id = in_val_t.groupby('id').apply(lambda x: x.iloc[(seq_length - 1):, :])['id'].values
 
     scaled_in_train_ts, scaled_out_train_ts = reshape_data(scaled_in_train.copy(), scaled_out_train.copy(),
                                                            seq_length, num_timesteps)
@@ -93,8 +97,10 @@ def main():
                 models[model_name].fit(scaled_in_train, scaled_out_train)
 
                 preds = models[model_name].predict(scaled_in_val)
-                transformed_preds = pd.DataFrame(y_scaler.inverse_transform(preds))
+                transformed_preds = convert_to_values(
+                    out_val, pd.DataFrame(y_scaler.inverse_transform(preds)), output_vars, seq_length=1)
                 metrics[model_name] = ensembled_base_metrics(out_val, transformed_preds, val_ids)
+
 
         elif model_type == 'multi_ts_models':
 
@@ -104,10 +110,11 @@ def main():
 
                     models[model_name + '_{}'.format(member)] = LongShortTermMemoryNetwork(**model_config)
                     models[model_name + '_{}'.format(member)].fit(scaled_in_train_ts, scaled_out_train_ts)
-                    preds = models[model_name + '_{}'.format(member)].predict(scaled_in_val_ts)
-                    transformed_preds = pd.DataFrame(y_scaler.inverse_transform(preds))
+                    transformed_preds = convert_to_values(
+                        in_val, pd.DataFrame(y_scaler.inverse_transform(preds)), output_vars, seq_length)
                     metrics[model_name + '_{}'.format(member)] = ensembled_base_metrics(
                         out_val, transformed_preds, val_id, seq_length)
+
 
     # write results
     metrics_str = [f'{key} : {metrics[key]}' for key in metrics]
