@@ -110,6 +110,7 @@ def main():
 
                     models[model_name + '_{}'.format(member)] = LongShortTermMemoryNetwork(**model_config)
                     models[model_name + '_{}'.format(member)].fit(scaled_in_train_ts, scaled_out_train_ts)
+                    preds = models[model_name + '_{}'.format(member)].predict(scaled_in_val_ts)
                     transformed_preds = convert_to_values(
                         in_val, pd.DataFrame(y_scaler.inverse_transform(preds)), output_vars, seq_length)
                     metrics[model_name + '_{}'.format(member)] = ensembled_base_metrics(
