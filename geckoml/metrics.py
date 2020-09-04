@@ -153,7 +153,7 @@ def ensembled_base_metrics(y_true, y_pred, ids, seq_length=1):
     """
     y_pred['id'] = ids
     if seq_length > 1:
-        y_true = y_true.groupby('id').apply(lambda x: x.iloc[(seq_length - 1):, 1:-1]).values
+        y_true = y_true.groupby('id').apply(lambda x: x.iloc[seq_length:, 1:-1]).values
 
     else:
         y_true = y_true.iloc[:, 1:-1].values
