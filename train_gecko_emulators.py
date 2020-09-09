@@ -92,13 +92,16 @@ def main():
         if model_type == 'single_ts_models':
 
             for model_name, model_config in config['model_configurations'][model_type].items():
-                models[model_name] = DenseNeuralNetwork(**model_config)
-                models[model_name].fit(scaled_in_train, scaled_out_train)
 
-                preds = models[model_name].predict(scaled_in_val)
-                transformed_preds = convert_to_values(
-                    out_val, pd.DataFrame(y_scaler.inverse_transform(preds)), output_vars, seq_length=1)
-                metrics[model_name] = ensembled_base_metrics(out_val, transformed_preds, val_ids)
+                for member in range(ensemble_members):
+
+                    models[model_name + '_{}'.format(member)] = DenseNeuralNetwork(**model_config)
+                    models[model_name + '_{}'.format(member)].fit(scaled_in_train, scaled_out_train)
+                    preds = models[model_name + '_{}'.format(member)].predict(scaled_in_val)
+                    transformed_preds = convert_to_values(
+                        out_val, pd.DataFrame(y_scaler.inverse_transform(preds)), output_vars, seq_length=1)
+                    metrics[model_name + '_{}'.format(member)] = ensembled_base_metrics(
+                        out_val, transformed_preds, val_ids)
 
 
         elif model_type == 'multi_ts_models':
@@ -111,7 +114,7 @@ def main():
                     models[model_name + '_{}'.format(member)].fit(scaled_in_train_ts, scaled_out_train_ts)
                     preds = models[model_name + '_{}'.format(member)].predict(scaled_in_val_ts)
                     transformed_preds = convert_to_values(
-                        in_val, pd.DataFrame(y_scaler.inverse_transform(preds)), output_vars, seq_length)
+                        out_val, pd.DataFrame(y_scaler.inverse_transform(preds)), output_vars, seq_length)
                     metrics[model_name + '_{}'.format(member)] = ensembled_base_metrics(
                         out_val, transformed_preds, val_id, seq_length)
 
