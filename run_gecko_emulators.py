@@ -9,6 +9,7 @@ from geckoml.box import GeckoBoxEmulator, GeckoBoxEmulatorTS
 from geckoml.metrics import ensembled_box_metrics, plot_mae_ts, match_true_exps, plot_ensemble
 from dask.distributed import Client, LocalCluster
 
+
 start = time.time()
 
 
@@ -49,22 +50,20 @@ def main():
         if model_type == 'single_ts_models':
             for model_name in config['model_configurations'][model_type].keys():
                 seq_length = 1
-                for member in range(ensemble_members):
-                    nnet_path = '{}models/{}_{}/'.format(output_path, species, model_name)
-                    mod = GeckoBoxEmulator(neural_net_path=nnet_path, output_scaler=y_scaler,
-                                           input_scaler=x_scaler)
-                    box_preds = mod.run_ensemble(client=client, data=scaled_val_in,
-                                                 num_timesteps=time_steps, num_exps=num_exps)
-                    y_true, y_preds = match_true_exps(truth=val_out, preds=box_preds, num_timesteps=time_steps,
-                                                      seq_length=seq_length)
-                    metrics[model_name + '_{}'.format(member)] = ensembled_box_metrics(y_true, y_preds)
-                    predictions[model_name + '_{}'.format(member)] = y_preds
-                    plot_mae_ts(y_true, y_preds, output_path, model_name, species)
-                plot_ensemble(truth=y_true, preds=predictions, output_path=output_path,
-                              species=species, model_name=model_name)
+                nnet_path = '{}models/{}_{}/'.format(output_path, species, model_name)
+                mod = GeckoBoxEmulator(neural_net_path=nnet_path, output_scaler=y_scaler,
+                                       input_scaler=x_scaler)
+                box_preds = mod.run_ensemble(client=client, data=scaled_val_in,
+                                             num_timesteps=time_steps, num_exps=num_exps)
+                y_true, y_preds = match_true_exps(truth=val_out, preds=box_preds, num_timesteps=time_steps,
+                                                  seq_length=seq_length)
+                metrics[model_name] = ensembled_box_metrics(y_true, y_preds)
+                plot_mae_ts(y_true, y_preds, output_path, model_name, species)
+                
         elif model_type == 'multi_ts_models':
             for model_name in config['model_configurations'][model_type].keys():
                 seq_length = config['seq_length']
+                
                 for member in range(ensemble_members):
                     nnet_path = '{}models/{}_{}_{}/'.format(output_path, species, model_name, member)
                     mod = GeckoBoxEmulatorTS(neural_net_path=nnet_path, output_scaler=y_scaler, seq_length=seq_length,
@@ -73,11 +72,10 @@ def main():
                                                  num_timesteps=time_steps, num_exps=num_exps)
                     y_true, y_preds = match_true_exps(truth=val_out, preds=box_preds, num_timesteps=time_steps,
                                                       seq_length=seq_length)
-                    y_true.to_csv('/glade/u/home/cbecker/true2.csv')
-                    y_preds.to_csv('/glade/u/home/cbecker/pred2.csv')
                     metrics[model_name + '_{}'.format(member)] = ensembled_box_metrics(y_true, y_preds)
                     predictions[model_name + '_{}'.format(member)] = y_preds
                     plot_mae_ts(y_true, y_preds, output_path, model_name, species)
+                    
                 plot_ensemble(truth=y_true, preds=predictions, output_path=output_path,
                               species=species, model_name=model_name)
     # write metrics to file
