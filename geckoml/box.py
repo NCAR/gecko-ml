@@ -28,7 +28,7 @@ class GeckoBoxEmulator(object):
 
         return
 
-    def run_ensemble(self, client, data, num_timesteps, num_exps='all'):
+    def run_ensemble(self, client, data, out_data, num_timesteps, num_exps='all'):
         """
         Run an ensemble of GECKO-A experiment emulations distributed over a cluster using dask distributed.
         Args:
@@ -46,20 +46,29 @@ class GeckoBoxEmulator(object):
         if num_exps != 'all':
             exps = np.random.choice(exps, num_exps, replace=False)
 
-        starting_conds = []
+        starting_conds, temps, initial_out_values = [], [], []
         time_series = data[data['id'] == exps[0]].iloc[1:num_timesteps+1, 0].reset_index(drop=True)
+
         for x in exps:
+            data_sub = data[data['id'] == x].iloc[:, 1:-1].copy()
+            data_sub.columns = self.input_cols[1:-1]
+            temperature_ts = data_sub['temperature (K)'][1:].values
+            iv = out_data[out_data['id'] == x].iloc[0, 1:-1].values
             sc = self.get_starting_conds(data, x)
             starting_conds.append(sc)
+            initial_out_values.append(iv)
+            temps.append(temperature_ts)
 
-        futures = client.map(self.predict, starting_conds, [num_timesteps]*len(exps), [time_series]*len(exps))
+        futures = client.map(self.predict, starting_conds, [num_timesteps]*len(exps), initial_out_values,
+                             temps, [time_series]*len(exps))
         results = client.gather(futures)
         del futures
         results_df = pd.concat(results)
+        results_df.columns = [str(x) for x in results_df.columns]
 
         return results_df
 
-    def predict(self, starting_conds, num_timesteps, time_series, starting_ts=0, seq_length=1):
+    def predict(self, starting_conds, num_timesteps, initial_val, temps, time_series):
         """ Run emulation of single experiment given initial conditions.
         Args:
             starting_conds (DataFrame): DataFrame of initial conditions.
@@ -74,30 +83,39 @@ class GeckoBoxEmulator(object):
         """
 
         mod = load_model(self.neural_net_path)
-
-        scaled_input = self.input_scaler.transform(starting_conds.iloc[starting_ts:seq_length, 1:-1])
-        static_input = scaled_input[:, -6:]
+        results = np.empty((num_timesteps, starting_conds.shape[-1] - 6))
+        new_input = np.empty((1, starting_conds.shape[-1]))
+        static_input = starting_conds[:, -6:]
         exp = starting_conds['id'].values[0]
 
         for i in range(num_timesteps):
 
             if i == 0:
 
-                pred = mod.predict(scaled_input)
-                new_input = np.concatenate([pred, static_input], axis=1)
-                pred_array = pred
+                pred = mod.predict(starting_conds)
+                transformed_pred = self.output_scaler.inverse_transform(pred)
+                results[i, :] = transformed_pred + initial_val
+                new_input[:, -6:] = static_input
+                new_input[:, :-6] = pred
+                new_input[:, 3] = temps[i]
 
             else:
 
                 pred = mod.predict(new_input)
-                new_input = np.concatenate([pred, static_input], axis=1)
-                pred_array = np.concatenate([pred_array, pred], axis=0)
+                transformed_pred = self.output_scaler.inverse_transform(pred)
+                results[i, :] = transformed_pred + results[i - 1, :]
 
-        results = pd.DataFrame(self.output_scaler.inverse_transform(pred_array))
-        results.columns = starting_conds.columns[1:-7]
-        results['id'] = exp
-        results['Time [s]'] = time_series
-        results = results.reset_index(drop=True)
+                if i < range(num_timesteps)[-1]:
+                    new_input[:, -6:] = static_input
+                    new_input[:, :-6] = pred
+                    new_input[:, 3] = temps[i]
+
+        results_df = pd.DataFrame(results)
+        results_df.columns = starting_conds.columns[1:-7]
+        results_df['Time [s]'] = time_series.values
+        results_df['id'] = exp
+        #results = results.reset_index(drop=True)
+
         del mod
         tf.keras.backend.clear_session()
         gc.collect()
@@ -218,8 +236,8 @@ class GeckoBoxEmulatorTS(object):
 
         mod = load_model(self.neural_net_path)
         ts = num_timesteps - self.seq_length + 1
-        results = np.empty((ts, starting_conds.shape[2] - 6))
-        new_input_single = np.empty((1, 1, starting_conds.shape[2]))
+        results = np.empty((ts, starting_conds.shape[-1] - 6))
+        new_input_single = np.empty((1, 1, starting_conds.shape[-1]))
         static_input = starting_conds[0, 0, -6:]
 
         for i in range(ts):
@@ -239,7 +257,7 @@ class GeckoBoxEmulatorTS(object):
 
                 pred = mod.predict(new_input)
                 transformed_pred = self.output_scaler.inverse_transform(pred)
-                results[i, :] = transformed_pred + results[i-1, :]
+                results[i, :] = transformed_pred + results[i - 1, :]
 
                 if i < range(ts)[-1]:
                     new_input_single[:, :, -6:] = static_input

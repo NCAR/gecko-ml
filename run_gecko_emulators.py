@@ -55,7 +55,7 @@ def main():
                     nnet_path = '{}models/{}_{}/'.format(output_path, species, model_name)
                     mod = GeckoBoxEmulator(neural_net_path=nnet_path, output_scaler=y_scaler,
                                            input_scaler=x_scaler)
-                    box_preds = mod.run_ensemble(client=client, data=scaled_val_in,
+                    box_preds = mod.run_ensemble(client=client, data=scaled_val_in, out_data=val_out,
                                                  num_timesteps=time_steps, num_exps=num_exps)
                     y_true, y_preds = match_true_exps(truth=val_out, preds=box_preds, num_timesteps=time_steps,
                                                       seq_length=seq_length)
