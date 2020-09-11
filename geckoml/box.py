@@ -54,13 +54,13 @@ class GeckoBoxEmulator(object):
             data_sub.columns = self.input_cols[1:-1]
             temperature_ts = data_sub['temperature (K)'][1:].values
             iv = out_data[out_data['id'] == x].iloc[0, 1:-1].values
-            sc = self.get_starting_conds(data, x)
+            sc = data_sub.iloc[0:1, :].values
             starting_conds.append(sc)
             initial_out_values.append(iv)
             temps.append(temperature_ts)
 
         futures = client.map(self.predict, starting_conds, [num_timesteps]*len(exps), initial_out_values,
-                             temps, [time_series]*len(exps))
+                             temps, [time_series]*len(exps), exps)
         results = client.gather(futures)
         del futures
         results_df = pd.concat(results)
@@ -68,7 +68,7 @@ class GeckoBoxEmulator(object):
 
         return results_df
 
-    def predict(self, starting_conds, num_timesteps, initial_val, temps, time_series):
+    def predict(self, starting_conds, num_timesteps, initial_val, temps, time_series, exp):
         """ Run emulation of single experiment given initial conditions.
         Args:
             starting_conds (DataFrame): DataFrame of initial conditions.
@@ -86,7 +86,6 @@ class GeckoBoxEmulator(object):
         results = np.empty((num_timesteps, starting_conds.shape[-1] - 6))
         new_input = np.empty((1, starting_conds.shape[-1]))
         static_input = starting_conds[:, -6:]
-        exp = starting_conds['id'].values[0]
 
         for i in range(num_timesteps):
 
@@ -111,16 +110,14 @@ class GeckoBoxEmulator(object):
                     new_input[:, 3] = temps[i]
 
         results_df = pd.DataFrame(results)
-        results_df.columns = starting_conds.columns[1:-7]
         results_df['Time [s]'] = time_series.values
         results_df['id'] = exp
-        #results = results.reset_index(drop=True)
 
         del mod
         tf.keras.backend.clear_session()
         gc.collect()
 
-        return results
+        return results_df
 
     @staticmethod
     def get_starting_conds(data, exp, seq_len=1, starting_ts=0):
