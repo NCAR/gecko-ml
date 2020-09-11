@@ -19,10 +19,10 @@ class GeckoBoxEmulator(object):
           input_scaler (str): X Scaler object used on data to train the neural network.
           output_scaler (str): Y Scaler object used on data to train the neural network.
     """
-    def __init__(self, neural_net_path, input_scaler, output_scaler, seed=8176):
+    def __init__(self, neural_net_path, output_scaler, input_cols, seed=8176):
 
         self.neural_net_path = neural_net_path
-        self.input_scaler = input_scaler
+        self.input_cols = input_cols
         self.output_scaler = output_scaler
         self.seed = seed
 
@@ -47,7 +47,7 @@ class GeckoBoxEmulator(object):
             exps = np.random.choice(exps, num_exps, replace=False)
 
         starting_conds, temps, initial_out_values = [], [], []
-        time_series = data[data['id'] == exps[0]].iloc[1:num_timesteps+1, 0].reset_index(drop=True)
+        time_series = data[data['id'] == exps[0]].['Time [s]']
 
         for x in exps:
             data_sub = data[data['id'] == x].iloc[:, 1:-1].copy()
