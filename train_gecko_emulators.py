@@ -10,11 +10,16 @@ import pandas as pd
 import argparse
 import numpy as np
 import yaml
+import os
 
 start = time.time()
 seed = 8886
 #np.random.seed(seed)
 #tf.random.set_seed(seed)
+
+for folder in ['models', 'plots', 'validation_data']:
+    os.makedirs(os.path.join('./save_out', folder), exist_ok=True)
+
 
 scalers = {"MinMaxScaler": MinMaxScaler,
            "MaxAbsScaler": MaxAbsScaler,

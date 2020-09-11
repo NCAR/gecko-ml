@@ -76,7 +76,8 @@ def main():
                     predictions[model_name + '_{}'.format(member)] = y_preds
                     plot_mae_ts(y_true, y_preds, output_path, model_name, species)
 
-    plot_ensemble(truth=y_true, preds=predictions, output_path=output_path, species=species)
+                plot_ensemble(truth=y_true, preds=predictions, output_path=output_path,
+                              species=species, model_name=model_name)
 
     # write metrics to file
     metrics_str = [f'{key} : {metrics[key]}' for key in metrics]
