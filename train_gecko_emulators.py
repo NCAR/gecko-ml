@@ -65,8 +65,8 @@ def main():
 
     # Rescale training and validation / testing data
     if scaler_type == 'QuantileTransformer':
-        x_scaler = Pipeline(steps=[('quant', QuantileTransformer()), ('minmax', MinMaxScaler((-1, 1)))])
-        y_scaler = Pipeline(steps=[('quant', QuantileTransformer()), ('minmax', MinMaxScaler((-1, 1)))])
+        x_scaler = Pipeline(steps=[('quant', QuantileTransformer()), ('minmax', MinMaxScaler((0, 1)))])
+        y_scaler = Pipeline(steps=[('quant', QuantileTransformer()), ('minmax', MinMaxScaler((0, 1)))])
     else:
         x_scaler, y_scaler = scalers[scaler_type](), scalers[scaler_type]()
 
