@@ -46,7 +46,7 @@ def main():
     time_steps = scaled_val_in['Time [s]'].nunique()
 
     # Run multiple GECKO experiments in parallel
-    cluster = LocalCluster(processes=True, n_workers=args.nworkers, threads_per_worker=args.threads_per_worker)
+    cluster = LocalCluster(processes=True, n_workers=args.n_workers, threads_per_worker=args.threads_per_worker)
     client = Client(cluster)
     models, predictions, metrics = {}, {}, {}
     for model_type in config["model_configurations"].keys():
