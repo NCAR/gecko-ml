@@ -50,7 +50,7 @@ class GeckoBoxEmulator(object):
             exps = np.random.choice(exps, num_exps, replace=False)
 
         starting_conds, temps, initial_out_values = [], [], []
-        time_series = data[data['id'] == exps[0]].['Time [s]']
+        time_series = data[data['id'] == exps[0]]['Time [s]']
 
         for x in exps:
             data_sub = data[data['id'] == x].iloc[:, 1:-1].copy()
