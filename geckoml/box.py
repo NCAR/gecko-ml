@@ -19,11 +19,13 @@ class GeckoBoxEmulator(object):
           input_scaler (str): X Scaler object used on data to train the neural network.
           output_scaler (str): Y Scaler object used on data to train the neural network.
     """
-    def __init__(self, neural_net_path, input_scaler, output_scaler, seed=8176):
+    def __init__(self, neural_net_path, input_scaler, output_scaler, input_cols, output_cols, seed=8176):
 
         self.neural_net_path = neural_net_path
         self.input_scaler = input_scaler
         self.output_scaler = output_scaler
+        self.input_cols = input_cols
+        self.output_cols = output_cols
         self.seed = seed
 
         return
@@ -54,7 +56,6 @@ class GeckoBoxEmulator(object):
 
         futures = client.map(self.predict, starting_conds, [num_timesteps]*len(exps), [time_series]*len(exps))
         results = client.gather(futures)
-        del futures
         results_df = pd.concat(results)
 
         return results_df
@@ -74,9 +75,9 @@ class GeckoBoxEmulator(object):
         """
 
         mod = load_model(self.neural_net_path)
-
+        num_env_vars = len(self.input_cols) - len(self.output_cols)
         scaled_input = self.input_scaler.transform(starting_conds.iloc[starting_ts:seq_length, 1:-1])
-        static_input = scaled_input[:, -6:]
+        static_input = scaled_input[:, -num_env_vars:]
         exp = starting_conds['id'].values[0]
 
         for i in range(num_timesteps):
@@ -94,7 +95,7 @@ class GeckoBoxEmulator(object):
                 pred_array = np.concatenate([pred_array, pred], axis=0)
 
         results = pd.DataFrame(self.output_scaler.inverse_transform(pred_array))
-        results.columns = starting_conds.columns[1:-7]
+        results.columns = starting_conds.columns[1:-(num_env_vars + 1)]
         results['id'] = exp
         results['Time [s]'] = time_series
         results = results.reset_index(drop=True)
@@ -121,7 +122,7 @@ class GeckoBoxEmulator(object):
         starting_conditions = data[data['id'] == exp].iloc[starting_ts:starting_ts + seq_len, :]
         return starting_conditions
 
-    def scale_input(self, input_concentrations, seq_length=1, starting_ts=0, ):
+    def scale_input(self, input_concentrations, seq_length=1, starting_ts=0):
         """
         Scale initial conditions for initial prediction of box emulator.
         Args:
@@ -132,9 +133,9 @@ class GeckoBoxEmulator(object):
             scaled_input (numpy array): scaled input array ready for predition.
             static_input (numpy array): scaled subset (env. conds) of input that remains static throughout emulation.
         """
-
+        num_env_vars = len(self.input_cols) - len(self.output_cols)
         scaled_input = self.input_scaler.transform(input_concentrations.iloc[starting_ts:seq_length, 1:-1])
-        static_input = scaled_input[:, -6:]
+        static_input = scaled_input[:, -num_env_vars:]
 
         return scaled_input, static_input
 
@@ -198,7 +199,6 @@ class GeckoBoxEmulatorTS(object):
         futures = client.map(self.predict_ts, starting_conds, [num_timesteps] * len(exps), initial_out_values,
                              temps, [time_series] * len(exps), exps)
         results = client.gather(futures)
-        del futures
         results_df = pd.concat(results)
         results_df.columns = [str(x) for x in results_df.columns]
 
@@ -215,12 +215,12 @@ class GeckoBoxEmulatorTS(object):
         Returns:
             results (DataFrame): Pandas dataframe of emulated values with time stamps.
         """
-
+        num_env_vars = len(self.input_cols) - len(self.output_cols)
         mod = load_model(self.neural_net_path)
         ts = num_timesteps - self.seq_length + 1
-        results = np.empty((ts, starting_conds.shape[2] - 6))
+        results = np.empty((ts, starting_conds.shape[2] - num_env_vars))
         new_input_single = np.empty((1, 1, starting_conds.shape[2]))
-        static_input = starting_conds[0, 0, -6:]
+        static_input = starting_conds[0, 0, -num_env_vars:]
 
         for i in range(ts):
 
@@ -229,8 +229,8 @@ class GeckoBoxEmulatorTS(object):
                 pred = mod.predict(starting_conds)
                 transformed_pred = self.output_scaler.inverse_transform(pred)
                 results[i, :] = transformed_pred + initial_val
-                new_input_single[:, :, -6:] = static_input
-                new_input_single[:, :, :-6] = pred
+                new_input_single[:, :, -num_env_vars:] = static_input
+                new_input_single[:, :, :-num_env_vars] = pred
                 new_input_single[:, :, 3] = temps[i]
                 x = starting_conds[:, 1:, :]
                 new_input = np.concatenate([x, new_input_single], axis=1)
@@ -242,8 +242,8 @@ class GeckoBoxEmulatorTS(object):
                 results[i, :] = transformed_pred + results[i-1, :]
 
                 if i < range(ts)[-1]:
-                    new_input_single[:, :, -6:] = static_input
-                    new_input_single[:, :, :-6] = pred
+                    new_input_single[:, :, -num_env_vars:] = static_input
+                    new_input_single[:, :, :-num_env_vars] = pred
                     new_input_single[:, :, 3] = temps[i]
                     x = new_input[:, 1:, :]
                     new_input = np.concatenate([x, new_input_single], axis=1)

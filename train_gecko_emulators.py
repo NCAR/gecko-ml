@@ -1,5 +1,5 @@
 from geckoml.models import DenseNeuralNetwork, LongShortTermMemoryNetwork
-from geckoml.data import combine_data, split_data, reshape_data, convert_to_values, get_tendencies
+from geckoml.data import combine_data, split_data, reshape_data, convert_to_values, get_tendencies, add_diurnal_signal
 from sklearn.preprocessing import StandardScaler, RobustScaler, MaxAbsScaler, MinMaxScaler, QuantileTransformer
 from geckoml.metrics import ensembled_base_metrics
 from sklearn.pipeline import Pipeline

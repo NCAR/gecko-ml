@@ -17,6 +17,9 @@ def main():
     # read YAML config as provided arg
     parser = argparse.ArgumentParser()
     parser.add_argument("-c", "--config", default="dodecane_agg.yml", help="Path to config file")
+    parser.add_argument("-w", "--n_workers", type=int, default=50, help="Number of dask workers")
+    parser.add_argument("-t", "--threads_per_worker", type=int, default=1,
+                        help="Threads per dask worker (multiprocessing)")
     args = parser.parse_args()
     with open(args.config) as config_file:
         config = yaml.load(config_file)
@@ -43,7 +46,7 @@ def main():
     time_steps = scaled_val_in['Time [s]'].nunique()
 
     # Run multiple GECKO experiments in parallel
-    cluster = LocalCluster(processes=True, n_workers=50, threads_per_worker=1)
+    cluster = LocalCluster(processes=True, n_workers=args.nworkers, threads_per_worker=args.threads_per_worker)
     client = Client(cluster)
     models, predictions, metrics = {}, {}, {}
     for model_type in config["model_configurations"].keys():
@@ -54,7 +57,7 @@ def main():
                 for member in range(ensemble_members):
                     nnet_path = '{}models/{}_{}/'.format(output_path, species, model_name)
                     mod = GeckoBoxEmulator(neural_net_path=nnet_path, output_scaler=y_scaler,
-                                           input_scaler=x_scaler)
+                                           input_scaler=x_scaler, input_cols=input_cols, output_cols=output_cols)
                     box_preds = mod.run_ensemble(client=client, data=scaled_val_in,
                                                  num_timesteps=time_steps, num_exps=num_exps)
                     y_true, y_preds = match_true_exps(truth=val_out, preds=box_preds, num_timesteps=time_steps,
