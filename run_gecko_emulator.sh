@@ -4,8 +4,8 @@
 #SBATCH --time=00:50:00
 #SBATCH --partition=dav
 #SBATCH --nodes=2
-#SBATCH --ntasks=72
-#SBATCH --ntasks-per-node=36
+#SBATCH --ntasks=100
+#SBATCH --ntasks-per-node=50
 #SBATCH --mem=256G
 #SBATCH -o ./run.txt
 #SBATCH -e ./run.txt

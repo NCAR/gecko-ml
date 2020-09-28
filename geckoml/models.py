@@ -345,7 +345,7 @@ class LongShortTermMemoryNetwork(object):
 
         nn_input = Input(shape=(seq_input, inputs), name="input")
         nn_model = nn_input
-        nn_model = Conv1D(64, 2, strides=2, padding='valid')(nn_model)
+        nn_model = Conv1D(64, 2, strides=1, padding='valid')(nn_model)
         for h in np.arange(self.hidden_layers):
             if h == np.arange(self.hidden_layers)[-1]:
                 nn_model = LSTM(self.hidden_neurons, return_sequences=True, dropout=self.dropout_alpha,

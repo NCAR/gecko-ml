@@ -57,7 +57,7 @@ def add_diurnal_signal(x_data):
     return x_data
 
 
-def get_tendencies(df, input_cols):
+def get_tendencies(df, output_cols):
     """
      Transform dataframe to time tendencies rather than actual values. Preserves static environmental values.
     Args:
@@ -67,12 +67,29 @@ def get_tendencies(df, input_cols):
     Returns: Pandas dataframe with input columns transformed to tendencies (Removes the first sample of each Exp).
     """
     df_copy = df.copy()
-    dummy_df = df[input_cols].drop(['Time [s]'], axis=1).groupby('id').diff().reset_index(drop=True)
-    df_copy.loc[:, ~df_copy.columns.isin(['Time [s]', 'id'])] = dummy_df
-    df_copy.loc[:, ~df_copy.columns.isin(input_cols)] = df.loc[:, ~df.columns.isin(input_cols)]
+    dummy_df = df[output_cols].drop(['Time [s]'], axis=1).groupby('id').diff().reset_index(drop=True)
+    df_copy[output_cols[1:-1]] = dummy_df.values
+    df_copy.loc[:, ~df_copy.columns.isin(output_cols)] = df.loc[:, ~df.columns.isin(output_cols)]
     dff = df_copy.groupby('id').apply(lambda x: x.iloc[1:, :]).reset_index(drop=True)
 
     return dff
+
+def convert_to_values(original, preds, output_cols, seq_length=1):
+    """
+    Convert tendencies back to actual values.
+    Args:
+        original: Original df that was used to create tendencies
+        preds: Model predictions.
+        output_cols: Output columns from config.
+    Returns: Converted Dataframe.
+    """
+    original = original[output_cols].groupby('id').apply(lambda x: x.iloc[seq_length - 1:-1, :]).reset_index(drop=True)
+    original = original.loc[:, original.columns.isin(output_cols)].drop(['Time [s]', 'id'], axis=1).reset_index(
+        drop=True)
+    preds.columns = output_cols[1:-1]
+    converted = original.add(preds)[output_cols[1:-1]]
+
+    return converted
 
 def get_data_serial(file_path, summary_data, bin_prefix, input_vars, output_vars, aggregate_bins):
     """
@@ -177,9 +194,8 @@ def split_data(input_data, output_data, n_splits=2, random_state=8):
                                     random_state=random_state).split(remain_in, groups=remain_in['id']))
      
     in_val, out_val = remain_in.iloc[val_indx], remain_out.iloc[val_indx]
-    in_val = add_diurnal_signal(in_val)
     in_test, out_test = remain_in.iloc[test_indx], remain_out.iloc[test_indx]
-    in_test = add_diurnal_signal(in_test)
+    in_train, in_val, in_test = map(add_diurnal_signal, [in_train, in_val, in_test])
 
     return in_train, out_train, in_val, out_val, in_test, out_test
 
