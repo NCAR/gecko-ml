@@ -1,0 +1,119 @@
+log: 'results/9_23/pandas'
+
+data:
+  data_path: "clustered/row_data"
+  shuffle: True
+  input_cols: [
+    'Time [s]',
+    'Precursor [ug/m3]',
+    'Gas [ug/m3] Bin01: lg(C*) = -6.5',
+    'Gas [ug/m3] Bin02: lg(C*) = -5.5',
+    'Gas [ug/m3] Bin03: lg(C*) = -4.5',
+    'Gas [ug/m3] Bin04: lg(C*) = -3.5',
+    'Gas [ug/m3] Bin05: lg(C*) = -2.5',
+    'Gas [ug/m3] Bin06: lg(C*) = -1.5',
+    'Gas [ug/m3] Bin07: lg(C*) = -0.5',
+    'Gas [ug/m3] Bin08: lg(C*) =  0.5',
+    'Gas [ug/m3] Bin09: lg(C*) =  1.5',
+    'Gas [ug/m3] Bin10: lg(C*) =  2.5',
+    'Gas [ug/m3] Bin11: lg(C*) =  3.5',
+    'Gas [ug/m3] Bin12: lg(C*) =  4.5',
+    'Gas [ug/m3] Bin13: lg(C*) =  5.5',
+    'Gas [ug/m3] Bin14: lg(C*) =  6.5',
+    'Aerosol [ug_m3] Bin01: lg(C*) = -6.5',
+    'Aerosol [ug_m3] Bin02: lg(C*) = -5.5',
+    'Aerosol [ug_m3] Bin03: lg(C*) = -4.5',
+    'Aerosol [ug_m3] Bin04: lg(C*) = -3.5',
+    'Aerosol [ug_m3] Bin05: lg(C*) = -2.5',
+    'Aerosol [ug_m3] Bin06: lg(C*) = -1.5',
+    'Aerosol [ug_m3] Bin07: lg(C*) = -0.5',
+    'Aerosol [ug_m3] Bin08: lg(C*) =  0.5',
+    'Aerosol [ug_m3] Bin09: lg(C*) =  1.5',
+    'Aerosol [ug_m3] Bin10: lg(C*) =  2.5',
+    'Aerosol [ug_m3] Bin11: lg(C*) =  3.5',
+    'Aerosol [ug_m3] Bin12: lg(C*) =  4.5',
+    'Aerosol [ug_m3] Bin13: lg(C*) =  5.5',
+    'Aerosol [ug_m3] Bin14: lg(C*) =  6.5',
+    'temperature (K)',
+    'solar zenith angle (degree)',
+    'pre-existing aerosols (ug/m3)',
+    'o3 (ppb)',
+    'nox (ppb)',
+    'oh (10^6 molec/cm3)',
+    'id']
+  output_cols: [
+    'Time [s]',
+    'Precursor [ug/m3]',
+    'Gas [ug/m3] Bin01: lg(C*) = -6.5',
+    'Gas [ug/m3] Bin02: lg(C*) = -5.5',
+    'Gas [ug/m3] Bin03: lg(C*) = -4.5',
+    'Gas [ug/m3] Bin04: lg(C*) = -3.5',
+    'Gas [ug/m3] Bin05: lg(C*) = -2.5',
+    'Gas [ug/m3] Bin06: lg(C*) = -1.5',
+    'Gas [ug/m3] Bin07: lg(C*) = -0.5',
+    'Gas [ug/m3] Bin08: lg(C*) =  0.5',
+    'Gas [ug/m3] Bin09: lg(C*) =  1.5',
+    'Gas [ug/m3] Bin10: lg(C*) =  2.5',
+    'Gas [ug/m3] Bin11: lg(C*) =  3.5',
+    'Gas [ug/m3] Bin12: lg(C*) =  4.5',
+    'Gas [ug/m3] Bin13: lg(C*) =  5.5',
+    'Gas [ug/m3] Bin14: lg(C*) =  6.5',
+    'Aerosol [ug_m3] Bin01: lg(C*) = -6.5',
+    'Aerosol [ug_m3] Bin02: lg(C*) = -5.5',
+    'Aerosol [ug_m3] Bin03: lg(C*) = -4.5',
+    'Aerosol [ug_m3] Bin04: lg(C*) = -3.5',
+    'Aerosol [ug_m3] Bin05: lg(C*) = -2.5',
+    'Aerosol [ug_m3] Bin06: lg(C*) = -1.5',
+    'Aerosol [ug_m3] Bin07: lg(C*) = -0.5',
+    'Aerosol [ug_m3] Bin08: lg(C*) =  0.5',
+    'Aerosol [ug_m3] Bin09: lg(C*) =  1.5',
+    'Aerosol [ug_m3] Bin10: lg(C*) =  2.5',
+    'Aerosol [ug_m3] Bin11: lg(C*) =  3.5',
+    'Aerosol [ug_m3] Bin12: lg(C*) =  4.5',
+    'Aerosol [ug_m3] Bin13: lg(C*) =  5.5',
+    'Aerosol [ug_m3] Bin14: lg(C*) =  6.5',
+    'id']
+  
+iterator:
+  num_workers: 4
+  batch_size: 1024
+  pin_memory: True
+  shuffle: True
+
+model:
+  input_size: 35
+  output_size: 29
+  hidden_dims: [10000]
+  dropouts: [0.2]
+
+optimizer: 
+  type: "lookahead-diffgrad"
+  lr: 0.00001
+
+trainer:
+  start_epoch: 0
+  epochs: 200
+  window_size: 50
+  teacher_force: True
+  gamma: 1.0
+  clip: 1.0
+  path_save: "results/9_23/pandas"
+
+callbacks:
+  MetricsLogger:
+    path_save: "results/9_23/pandas"
+    reload: False
+  EarlyStopping:
+    patience: 10
+    verbose: True
+    path_save: "results/9_23/pandas/checkpoint.pt"
+    save_every_epoch: True
+#   ExponentialLR:
+#     gamma: 0.999
+    
+  ReduceLROnPlateau: 
+    mode: "min"
+    factor: 0.2
+    patience: 1
+    min_lr: 0.0000000000000000001
+    verbose: True

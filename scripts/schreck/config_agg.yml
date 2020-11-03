@@ -1,0 +1,72 @@
+log: 'run4'
+
+data:
+  data_path: "/glade/p/cisl/aiml/gecko/ML2019_dodecane_postproc"
+  save_path: "run4"
+  summary_file: "C02000_Exp_List_ML2019_dodecane_v1_LatinHyperCube.csv"
+  bin_prefix: ['Gas [ug/m3]', 'Aerosol [ug_m3]']
+  input_vars: [
+    'Time [s]',
+    'Precursor [ug/m3]',
+    'Gas [ug/m3]',
+    'Aerosol [ug_m3]',
+    'temperature (K)',
+    'solar zenith angle (degree)',
+    'pre-existing aerosols (ug/m3)',
+    'o3 (ppb)',
+    'nox (ppb)',
+    'oh (10^6 molec/cm3)',
+    'id']
+  output_vars: [
+    'Time [s]',
+    'Precursor [ug/m3]',
+    'Gas [ug/m3]',
+    'Aerosol [ug_m3]',
+    'id']
+  min_exp: 0
+  max_exp: 1999
+  seq_length: 1
+  cached_dir: "run4/toluene"
+  
+iterator:
+  num_workers: 24
+  batch_size: 16
+  pin_memory: True
+  shuffle: True
+
+model:
+  input_size: 9
+  output_size: 3
+  hidden_dims: [1000, 500]
+  dropouts: [0.5, 0.5]
+
+optimizer: 
+  type: "lookahead-diffgrad"
+  lr: 0.00001
+
+trainer:
+  start_epoch: 0
+  epochs: 100
+  window_size: 15
+  teacher_force: True
+  gamma: 0.99
+  clip: 1.0
+  path_save: "run4"
+
+callbacks:
+  MetricsLogger:
+    path_save: "run4"
+    reload: False
+  EarlyStopping:
+    patience: 5
+    verbose: True
+    path_save: "run4/checkpoint.pt"
+    save_every_epoch: True
+#   ExponentialLR:
+#     gamma: 0.99
+  ReduceLROnPlateau: 
+    mode: "min"
+    factor: 0.2
+    patience: 2
+    min_lr: 0.000000000000001
+    verbose: True
