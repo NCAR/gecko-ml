@@ -8,6 +8,7 @@ Charlie Becker
 David John Gagne
 Keely Lawrence
 Siyuan Wang
+John Schreck
 
 ## Requirements
 
