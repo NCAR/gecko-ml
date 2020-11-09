@@ -1,5 +1,5 @@
 from tensorflow.keras.layers import Input, Dense, Dropout, GaussianNoise, Activation, \
-    Concatenate, BatchNormalization, LSTM, Conv1D, AveragePooling1D, MaxPooling1D
+    Concatenate, BatchNormalization, LSTM, Conv1D, AveragePooling1D, MaxPooling1D, LeakyReLU
 from tensorflow.keras.models import Model
 from tensorflow.keras.regularizers import l2
 from tensorflow.keras.optimizers import Adam, SGD
@@ -73,6 +73,9 @@ class DenseNeuralNetwork(object):
         """
         nn_input = Input(shape=(inputs,), name="input")
         nn_model = nn_input
+        if self.activation == 'leaky':
+            self.activation = LeakyReLU()
+
         for h in range(self.hidden_layers):
             nn_model = Dense(self.hidden_neurons, activation=self.activation,
                              kernel_regularizer=l2(self.l2_weight), name=f"dense_{h:02d}")(nn_model)
@@ -137,146 +140,6 @@ class DenseNeuralNetwork(object):
     def predict_proba(self, x):
         y_prob = self.model.predict(x, batch_size=self.batch_size)
         return y_prob
-
-
-class DenseGAN(object):
-    """
-    A conditional generative adversarial network consisting of dense neural networks for the generator
-    and discriminator.
-
-    Args:
-        hidden_layers: Number of hidden layers in each network
-        hidden_neurons: number of neurons in each hidden layer
-        activation: Type of nonlinear activation function. Choose from relu, elu, selu, tanh,
-        optimizer: Neural network optimization function. Use defaults or pass keras optimizer object.
-        loss: Name of loss function being used.
-        use_noise: Apply Gaussian noise to hidden layers to generate uncertainty in results
-        noise_sd: Standard deviation of Gaussian noise
-        use_dropout: Whether or not to include dropout layers
-        dropout_alpha: Percent chance of neuron being randomly set to 0. Value should be between 0 and 1.
-        batch_norm_output: Whether or not to add batch normalization layer to output of generator
-        epochs: Number of epochs to train model
-        verbose: If greater than 0, output batch loss values during training
-        report_frequency: How often to report the batch loss
-
-
-    """
-    def __init__(self, hidden_layers=2, hidden_neurons=16, activation="relu",
-                 optimizer="adam", loss="binary_crossentropy", use_noise=False, noise_sd=0.1, use_dropout=False,
-                 dropout_alpha=0.1, batch_norm_output=True, batch_size=1024, epochs=20,
-                 verbose=0, report_frequency=50, classifier=False):
-        self.hidden_layers = hidden_layers
-        self.hidden_neurons = hidden_neurons
-        self.activation = activation
-        self.optimizer = optimizer
-        self.loss = loss
-        self.batch_size = batch_size
-        self.use_noise = use_noise
-        self.noise_sd = noise_sd
-        self.use_dropout = use_dropout
-        self.dropout_alpha = dropout_alpha
-        self.batch_norm_output = batch_norm_output
-        self.epochs = epochs
-        self.verbose = verbose
-        self.report_frequency = report_frequency
-        self.classifier = classifier
-        self.generator = None
-        self.discriminator = None
-        self.gen_disc = None
-        self.gen_predict_func = None
-
-    def build_generator(self, inputs, outputs):
-        gen_input = Input((inputs,))
-        gen_model = gen_input
-        for h in range(self.hidden_layers):
-            gen_model = Dense(self.hidden_neurons)(gen_model)
-            gen_model = Activation(self.activation)(gen_model)
-            if self.use_noise:
-                gen_model = GaussianNoise(self.noise_sd)(gen_model)
-            if self.use_dropout:
-                gen_model = Dropout(self.dropout_alpha)(gen_model)
-        gen_model = Dense(outputs)(gen_model)
-        if self.batch_norm_output:
-            gen_model = BatchNormalization()(gen_model)
-        self.generator = Model(gen_input, gen_model)
-        self.generator.compile(optimizer=self.optimizer, loss="mse")
-
-    def build_discriminator(self, inputs, outputs):
-        disc_input = Input((outputs,))
-        disc_cond_input = Input((inputs,))
-        disc_model = Concatenate()([disc_cond_input, disc_input])
-        for h in range(self.hidden_layers):
-            disc_model = Dense(self.hidden_neurons)(disc_model)
-            disc_model = Activation(self.activation)(disc_model)
-            if self.use_noise:
-                disc_model = GaussianNoise(self.noise_sd)(disc_model)
-            if self.use_dropout:
-                disc_model = Dropout(self.dropout_alpha)(disc_model)
-        disc_model = Dense(1)(disc_model)
-        disc_model = Activation("sigmoid")(disc_model)
-        self.discriminator = Model([disc_cond_input, disc_input], disc_model)
-        self.discriminator.compile(optimizer=self.optimizer, loss=self.loss)
-
-    def stack_gen_disc(self):
-        if self.generator is None or self.discriminator is None:
-            raise RuntimeError("The generator or discriminator models have not been built yet.")
-        self.discriminator.trainable = False
-        stacked_model = self.discriminator([self.generator.layers[0].output, self.generator.output])
-        self.gen_disc = Model(self.generator.input, stacked_model)
-        self.gen_disc.compile(optimizer=self.optimizer, loss=self.loss)
-
-    def fit(self, x, y):
-        inputs = x.shape[1]
-        outputs = y.shape[1]
-        # Build generator model
-        self.build_generator(inputs, outputs)
-        # Build discriminator model
-        self.build_discriminator(inputs, outputs)
-        # Stack generator and discriminator models for training the generator
-        self.stack_gen_disc()
-        self.gen_predict_func = K.function([self.generator.input, K.learning_phase()], [self.generator.output])
-        batch_half = int(self.batch_size // 2)
-        # Remove examples until the number of training examples is divisible by the batch size
-        batch_diff = x.shape[0] % self.batch_size
-        if x.shape[0] % self.batch_size != 0:
-            x_sub = x[:x.shape[0] - batch_diff]
-            y_sub = y[:y.shape[0] - batch_diff]
-        else:
-            x_sub = x
-            y_sub = y
-        indices = np.arange(x_sub.shape[0])
-        x_gen_batch = np.zeros((self.batch_size, x_sub.shape[1]))
-        x_disc_batch = np.zeros((self.batch_size, x_sub.shape[1]))
-        y_disc_batch = np.zeros((self.batch_size, y_sub.shape[1]))
-        disc_batch_labels = np.zeros(self.batch_size)
-        disc_batch_labels[:batch_half] = 1
-        gen_batch_labels = np.ones(self.batch_size)
-        loss_history = dict(disc_loss=[], gen_loss=[], step=[], epoch=[], batch=[])
-        step = 0
-        for epoch in range(self.epochs):
-            np.random.shuffle(indices)
-            for b, b_index in enumerate(np.arange(self.batch_size, x_sub.shape[0], self.batch_size * 2)):
-                x_disc_batch[:] = x_sub[indices[b_index - self.batch_size: b_index]]
-                y_disc_batch[:batch_half] = y_sub[indices[b_index - self.batch_size: b_index - batch_half]]
-                y_disc_batch[batch_half:] = self.gen_predict_func([x_disc_batch[batch_half:], 1])[0]
-                loss_history["disc_loss"].append(self.discriminator.train_on_batch([x_disc_batch, y_disc_batch],
-                                                                                   disc_batch_labels))
-                x_gen_batch[:] = x_sub[indices[b_index: b_index + self.batch_size]]
-                loss_history["gen_loss"].append(self.gen_disc.train_on_batch(x_gen_batch,
-                                                                             gen_batch_labels))
-                loss_history["epoch"].append(epoch)
-                loss_history["batch"].append(b)
-                loss_history["step"].append(step)
-                if self.verbose > 0 and step % self.report_frequency == 0:
-                    print("Epoch {0:03d}, Batch {1:04d}, Step {2:06d}, Disc Loss: {3:0.4f} Gen Loss: {4:0.4f}".format(
-                        loss_history["epoch"][-1], loss_history["batch"][-1], loss_history["step"][-1],
-                        loss_history["disc_loss"][-1], loss_history["gen_loss"][-1]))
-                step += 1
-        return pd.DataFrame(loss_history)
-
-    def predict(self, x):
-        predictions = self.generator.predict(x).ravel()
-        return predictions
 
 
 class LongShortTermMemoryNetwork(object):
