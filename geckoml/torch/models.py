@@ -38,24 +38,24 @@ class DenseNet(nn.Module):
                 f"layer sizes {self.hidden_dims}, and dropouts {self.dropouts}"
             )
         
-        self.model = []
-        self.model.append(nn.Linear(input_size, self.hidden_dims[0]))
+        self.model_list = []
+        self.model_list.append(nn.Linear(input_size, self.hidden_dims[0]))
         if self.batch_norm:
-            self.model.append(nn.BatchNorm1d(num_features=self.hidden_dims[0]))
-        self.model.append(nn.LeakyReLU())
+            self.model_list.append(nn.BatchNorm1d(num_features=self.hidden_dims[0]))
+        self.model_list.append(nn.LeakyReLU())
         if len(self.hidden_dims) > 1:
             if self.dropouts[0] > 0.0:
-                self.model.append(nn.Dropout(self.dropouts[0]))
+                self.model_list.append(nn.Dropout(self.dropouts[0]))
             for i in range(len(self.hidden_dims)-1):
-                self.model.append(nn.Linear(self.hidden_dims[i], self.hidden_dims[i+1]))
+                self.model_list.append(nn.Linear(self.hidden_dims[i], self.hidden_dims[i+1]))
                 if self.batch_norm:
-                    self.model.append(nn.BatchNorm1d(num_features=self.hidden_dims[i+1]))
-                self.model.append(nn.LeakyReLU())
+                    self.model_list.append(nn.BatchNorm1d(num_features=self.hidden_dims[i+1]))
+                self.model_list.append(nn.LeakyReLU())
                 if self.dropouts[i+1] > 0.0:
-                    self.model.append(nn.Dropout(self.dropouts[i+1]))
-        self.model.append(nn.Linear(self.hidden_dims[-1], output_size))
-        self.model.append(nn.Sigmoid())
-        self.model = nn.Sequential(*self.model)
+                    self.model_list.append(nn.Dropout(self.dropouts[i+1]))
+        self.model_list.append(nn.Linear(self.hidden_dims[-1], output_size))
+        self.model_list.append(nn.Sigmoid())
+        self.model = nn.Sequential(*self.model_list)
 
     def forward(self, 
                 x: torch.FloatTensor):
