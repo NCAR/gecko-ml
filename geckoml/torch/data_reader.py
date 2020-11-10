@@ -191,7 +191,7 @@ class LoadGeckoData:
         else:
             logger.info("Fitting data preprocessing models: QuantileTransformer")
             self.reshape = False                    
-            with Pool(24) as p:
+            with Pool(8) as p:
                 xs, ys = zip(*[(x,y) for (x,y) in tqdm.tqdm(
                     p.imap(self.__getitem__, range(len(self.experiment_subset))),
                     total = len(self.experiment_subset))
