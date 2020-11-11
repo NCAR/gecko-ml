@@ -27,7 +27,7 @@ class BoxBaseTrainer:
                  valid_gen, 
                  dataloader, 
                  valid_dataloader,
-                 model_conf, 
+                 model_conf,
                  optimizer_conf,
                  input_size,
                  output_size,
