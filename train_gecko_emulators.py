@@ -64,7 +64,7 @@ def main():
         x_scaler = Pipeline(steps=[('quant', QuantileTransformer()), ('minmax', MinMaxScaler((0, 1)))])
         y_scaler = Pipeline(steps=[('quant', QuantileTransformer()), ('minmax', MinMaxScaler((0, 1)))])
     else:
-        x_scaler, y_scaler = scalers[scaler_type](), scalers[scaler_type]()
+        x_scaler, y_scaler = scalers[scaler_type]((-1, 1)), scalers[scaler_type]((-1, 1))
 
     num_timesteps = in_train['Time [s]'].nunique()
 

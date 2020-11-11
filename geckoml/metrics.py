@@ -154,6 +154,7 @@ def ensembled_base_metrics(y_true, y_pred, ids):
     y_pred['id'] = ids
     y_true = y_true.iloc[:, 1:-1].values
     y_pred = y_pred.iloc[:, :-1].values
+    y_pred[:, 0] = 10**y_pred[:, 0]
     metrics = {}
 
     metrics['RMSE'] = root_mean_squared_error(y_true, y_pred)

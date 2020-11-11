@@ -161,8 +161,9 @@ def combine_data(dir_path, summary_file, aggregate_bins, bin_prefix,
     ddf_in, ddf_out = dd.from_delayed(dfs_in), dd.from_delayed(dfs_out)  # assemble dask dfs
     
     df_in = ddf_in.compute(scheduler='processes').reset_index() # transform back to pandas df
-    df_out = ddf_out.compute(scheduler='processes').reset_index() 
-
+    df_out = ddf_out.compute(scheduler='processes').reset_index()
+    df_in['Precursor [ug/m3]'] = np.log10(df_in['Precursor [ug/m3]'])
+    df_out['Precursor [ug/m3]'] = np.log10(df_out['Precursor [ug/m3]'])
     del df_in['index'], df_out['index']
 
     return df_in, df_out

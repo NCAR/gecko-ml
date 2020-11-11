@@ -3,6 +3,7 @@ import pandas as pd
 import yaml
 import time
 import joblib
+import numpy as np
 import tensorflow as tf
 from geckoml.box import GeckoBoxEmulator, GeckoBoxEmulatorTS
 from geckoml.metrics import ensembled_box_metrics, plot_mae_ts, match_true_exps, plot_ensemble
@@ -34,6 +35,8 @@ def main():
     # Read validation data and scaler objects
     val_in = pd.read_parquet('{}validation_data/{}_in_val.parquet'.format(output_path, species))
     val_out = pd.read_parquet('{}validation_data/{}_out_val.parquet'.format(output_path, species))
+
+    val_out['Precursor [ug/m3]'] = 10**(val_out['Precursor [ug/m3]'])
 
     x_scaler = joblib.load('{}scalers/{}_x.scaler'.format(output_path, species))
     y_scaler = joblib.load('{}scalers/{}_y.scaler'.format(output_path, species))

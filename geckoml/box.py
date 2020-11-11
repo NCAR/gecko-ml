@@ -112,6 +112,7 @@ class GeckoBoxEmulator(object):
                     new_input[:, :-num_env_vars] = pred
                     new_input[:, 3] = temps[i]
 
+        results[:, 0] = 10 ** results[:, 0]
         results_df = pd.DataFrame(results)
         results_df['Time [s]'] = time_series.values
         results_df['id'] = exp
