@@ -1,5 +1,5 @@
 from geckoml.models import DenseNeuralNetwork, LongShortTermMemoryNetwork
-from geckoml.data import combine_data, split_data, reshape_data, add_diurnal_signal
+from geckoml.data import combine_data, split_data, reshape_data, partition_y_output
 from sklearn.preprocessing import StandardScaler, RobustScaler, MaxAbsScaler, MinMaxScaler, QuantileTransformer
 from geckoml.metrics import ensembled_base_metrics
 from sklearn.pipeline import Pipeline
@@ -89,15 +89,16 @@ def main():
 
             for model_name, model_config in config['model_configurations'][model_type].items():
 
+                y = partition_y_output(scaled_out_train)
+
                 for member in range(ensemble_members):
 
                     models[model_name + '_{}'.format(member)] = DenseNeuralNetwork(**model_config)
-                    models[model_name + '_{}'.format(member)].fit(scaled_in_train, scaled_out_train)
+                    models[model_name + '_{}'.format(member)].fit(scaled_in_train, y)
                     preds = models[model_name + '_{}'.format(member)].predict(scaled_in_val)
                     transformed_preds = pd.DataFrame(y_scaler.inverse_transform(preds))
                     metrics[model_name + '_{}'.format(member)] = ensembled_base_metrics(
                         out_val, transformed_preds, val_ids)
-
 
         elif model_type == 'multi_ts_models':
 

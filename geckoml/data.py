@@ -168,6 +168,24 @@ def combine_data(dir_path, summary_file, aggregate_bins, bin_prefix,
 
     return df_in, df_out
 
+
+def partition_y_output(y, output_layers):
+    """
+    Split y data into list based on number of output layers
+    :param y: scaled y data (np.array)
+    :param output_layers: number of output layer from config file
+    :return: list of y data to be fed to fit function
+    """
+    if (output_layers > 3) | (output_layers < 1):
+        raise ValueError('Invalid number of layers. Must be either 1, 2 or 3.')
+    elif output_layers == 3:
+        data = [y[:, 0], y[:, 1], y[:, 2]]
+    elif output_layers == 2:
+        data = [y[:, 0], y[:, 1:]]
+    elif output_layers == 1:
+        data = y.reshape(-1, 1)
+    return data
+
 def split_data(input_data, output_data, n_splits=2, random_state=8):
     """
     Split data, by experiment, into training/validation/testing sets for both input/output dataframes.

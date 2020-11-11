@@ -33,7 +33,7 @@ class DenseNeuralNetwork(object):
         verbose: Level of detail to provide during training
         model: Keras Model object
     """
-    def __init__(self, hidden_layers=1, hidden_neurons=4, activation="relu",
+    def __init__(self, hidden_layers=1, hidden_neurons=4, activation="relu", output_layers=1,
                  output_activation="linear", optimizer="adam", loss="mse", use_noise=False, noise_sd=0.01,
                  lr=0.001, use_dropout=False, dropout_alpha=0.1, batch_size=128, epochs=2,
                  l2_weight=0.01, sgd_momentum=0.9, adam_beta_1=0.9, adam_beta_2=0.999, decay=0, verbose=0,
@@ -41,6 +41,7 @@ class DenseNeuralNetwork(object):
         self.hidden_layers = hidden_layers
         self.hidden_neurons = hidden_neurons
         self.activation = activation
+        self.output_layers = output_layers
         self.output_activation = output_activation
         self.optimizer = optimizer
         self.optimizer_obj = None
@@ -83,8 +84,9 @@ class DenseNeuralNetwork(object):
                 nn_model = Dropout(self.dropout_alpha, name=f"dropout_h_{h:02d}")(nn_model)
             if self.use_noise:
                 nn_model = GaussianNoise(self.noise_sd, name=f"ganoise_h_{h:02d}")(nn_model)
-        nn_model = Dense(outputs,
-                         activation=self.output_activation, name=f"dense_{self.hidden_layers:02d}")(nn_model)
+        for i in range(len(outputs)):
+            nn_model = Dense(outputs[i],
+                             activation=self.output_activation, name=f"dense_{self.hidden_layers:02d}")(nn_model)
         self.model = Model(nn_input, nn_model)
         if self.optimizer == "adam":
             self.optimizer_obj = Adam(lr=self.lr, beta_1=self.adam_beta_1, beta_2=self.adam_beta_2, decay=self.decay)
@@ -94,10 +96,7 @@ class DenseNeuralNetwork(object):
 
     def fit(self, x, y):
         inputs = x.shape[1]
-        if len(y.shape) == 1:
-            outputs = 1
-        else:
-            outputs = y.shape[1]
+        outputs = [i.shape[1] for i in y]
         if self.classifier:
             outputs = np.unique(y).size
         self.build_neural_network(inputs, outputs)
@@ -134,7 +133,10 @@ class DenseNeuralNetwork(object):
             y_prob = self.model.predict(x, batch_size=self.batch_size)
             y_out = self.y_labels[np.argmax(y_prob, axis=1)]
         else:
-            y_out = self.model.predict(x, batch_size=self.batch_size)
+            if self.output_layers == 1:
+                y_out = self.model.predict(x, batch_size=self.batch_size)
+            else:
+                y_out = np.concatenate(self.model.predict(x, batch_size=self.batch_size), axis=1)
         return y_out
 
     def predict_proba(self, x):
