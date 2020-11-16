@@ -35,10 +35,11 @@ model_configurations:
       hidden_layers: 1
       hidden_neurons: 500
       activation: "leaky"
-      output_layers: 2
+      output_layers: 3
       output_activation: "linear"
       optimizer: "adam"
-      loss: ["mae", "mse"]
+      loss: ["mae", "mse", "mse"]
+      loss_weights: [1, 20, 50]
       lr: 0.00005
       batch_size: 2048
       use_noise: False
@@ -50,7 +51,7 @@ model_configurations:
       sgd_momentum: 0.9
       adam_beta_1: 0.9
       adam_beta_2: 0.999
-      decay: 0.00005/30
+      decay: 0
       verbose:  1
       classifier: False
 

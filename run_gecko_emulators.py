@@ -45,7 +45,6 @@ def main():
     scaled_val_in = val_in.copy()
     scaled_val_in[input_cols[1:-1]] = scaled_val_arr
     time_steps = scaled_val_in['Time [s]'].nunique()
-    print(time_steps)
     # Run multiple GECKO experiments in parallel
     cluster = LocalCluster(processes=True, n_workers=args.n_workers, threads_per_worker=args.threads_per_worker)
     client = Client(cluster)

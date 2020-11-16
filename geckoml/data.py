@@ -179,11 +179,11 @@ def partition_y_output(y, output_layers):
     if (output_layers > 3) | (output_layers < 1):
         raise ValueError('Invalid number of layers. Must be either 1, 2 or 3.')
     elif output_layers == 3:
-        data = [y[:, 0], y[:, 1], y[:, 2]]
+        data = [y[:, 0].reshape(-1, 1), y[:, 1].reshape(-1, 1), y[:, 2].reshape(-1, 1)]
     elif output_layers == 2:
-        data = [y[:, 0], y[:, 1:]]
+        data = [y[:, 0].reshape(-1, 1), y[:, 1:].reshape(-1, 2)]
     elif output_layers == 1:
-        data = y.reshape(-1, 1)
+        data = [y.reshape(-1, 1)]
     return data
 
 def split_data(input_data, output_data, n_splits=2, random_state=8):

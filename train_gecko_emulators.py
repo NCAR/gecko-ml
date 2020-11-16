@@ -64,6 +64,7 @@ def main():
         x_scaler = Pipeline(steps=[('quant', QuantileTransformer()), ('minmax', MinMaxScaler((0, 1)))])
         y_scaler = Pipeline(steps=[('quant', QuantileTransformer()), ('minmax', MinMaxScaler((0, 1)))])
     else:
+
         x_scaler, y_scaler = scalers[scaler_type]((-1, 1)), scalers[scaler_type]((-1, 1))
 
     num_timesteps = in_train['Time [s]'].nunique()
@@ -89,7 +90,7 @@ def main():
 
             for model_name, model_config in config['model_configurations'][model_type].items():
 
-                y = partition_y_output(scaled_out_train)
+                y = partition_y_output(scaled_out_train, model_config['output_layers'])
 
                 for member in range(ensemble_members):
 

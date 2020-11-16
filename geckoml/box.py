@@ -94,7 +94,7 @@ class GeckoBoxEmulator(object):
 
             if i == 0:
 
-                pred = mod.predict(starting_conds)
+                pred = np.block(mod.predict(starting_conds))
                 transformed_pred = self.output_scaler.inverse_transform(pred)
                 results[i, :] = transformed_pred
                 new_input[:, -num_env_vars:] = static_input
@@ -103,7 +103,7 @@ class GeckoBoxEmulator(object):
 
             else:
 
-                pred = mod.predict(new_input)
+                pred = np.block(mod.predict(new_input))
                 transformed_pred = self.output_scaler.inverse_transform(pred)
                 results[i, :] = transformed_pred
 
