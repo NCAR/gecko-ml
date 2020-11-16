@@ -144,7 +144,7 @@ def ensembled_box_metrics(y_true, y_pred):
     return metrics
 
 
-def ensembled_base_metrics(y_true, y_pred, ids, seq_length=1):
+def ensembled_base_metrics(y_true, y_pred, ids):
     """ Call a variety of metrics to be calculated (Hellenger distance and RMSE, currently) on Base Model results using
         all output variables.
     Args:
@@ -152,8 +152,9 @@ def ensembled_base_metrics(y_true, y_pred, ids, seq_length=1):
         y_pred (np.array): Predicted output data
     """
     y_pred['id'] = ids
-    y_true = y_true.groupby('id').apply(lambda x: x.iloc[seq_length:, 1:-1]).values
+    y_true = y_true.iloc[:, 1:-1].values
     y_pred = y_pred.iloc[:, :-1].values
+    y_pred[:, 0] = 10**y_pred[:, 0]
     metrics = {}
 
     metrics['RMSE'] = root_mean_squared_error(y_true, y_pred)

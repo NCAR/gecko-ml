@@ -94,24 +94,25 @@ class GeckoBoxEmulator(object):
 
             if i == 0:
 
-                pred = mod.predict(starting_conds)
+                pred = np.block(mod.predict(starting_conds))
                 transformed_pred = self.output_scaler.inverse_transform(pred)
-                results[i, :] = transformed_pred + initial_val
+                results[i, :] = transformed_pred
                 new_input[:, -num_env_vars:] = static_input
                 new_input[:, :-num_env_vars] = pred
                 new_input[:, 3] = temps[i]
 
             else:
 
-                pred = mod.predict(new_input)
+                pred = np.block(mod.predict(new_input))
                 transformed_pred = self.output_scaler.inverse_transform(pred)
-                results[i, :] = transformed_pred + results[i - 1, :]
+                results[i, :] = transformed_pred
 
                 if i < range(num_timesteps)[-1]:
                     new_input[:, -num_env_vars:] = static_input
                     new_input[:, :-num_env_vars] = pred
                     new_input[:, 3] = temps[i]
 
+        results[:, 0] = 10 ** results[:, 0]
         results_df = pd.DataFrame(results)
         results_df['Time [s]'] = time_series.values
         results_df['id'] = exp

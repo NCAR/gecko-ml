@@ -3,8 +3,8 @@ import pandas as pd
 import yaml
 import time
 import joblib
+import numpy as np
 import tensorflow as tf
-from geckoml.data import get_tendencies
 from geckoml.box import GeckoBoxEmulator, GeckoBoxEmulatorTS
 from geckoml.metrics import ensembled_box_metrics, plot_mae_ts, match_true_exps, plot_ensemble
 from dask.distributed import Client, LocalCluster
@@ -34,17 +34,17 @@ def main():
 
     # Read validation data and scaler objects
     val_in = pd.read_parquet('{}validation_data/{}_in_val.parquet'.format(output_path, species))
-    val_in_t = get_tendencies(val_in, output_cols)
     val_out = pd.read_parquet('{}validation_data/{}_out_val.parquet'.format(output_path, species))
+
+    val_out['Precursor [ug/m3]'] = 10**(val_out['Precursor [ug/m3]'])
 
     x_scaler = joblib.load('{}scalers/{}_x.scaler'.format(output_path, species))
     y_scaler = joblib.load('{}scalers/{}_y.scaler'.format(output_path, species))
 
-    scaled_val_arr = x_scaler.transform(val_in_t.iloc[:, 1:-1])
-    scaled_val_in = val_in_t.copy()
+    scaled_val_arr = x_scaler.transform(val_in.iloc[:, 1:-1])
+    scaled_val_in = val_in.copy()
     scaled_val_in[input_cols[1:-1]] = scaled_val_arr
     time_steps = scaled_val_in['Time [s]'].nunique()
-
     # Run multiple GECKO experiments in parallel
     cluster = LocalCluster(processes=True, n_workers=args.n_workers, threads_per_worker=args.threads_per_worker)
     client = Client(cluster)
