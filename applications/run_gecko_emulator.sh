@@ -10,6 +10,6 @@
 #SBATCH -o ./run.txt
 #SBATCH -e ./run.txt
 module load ncarenv/1.3 gnu/8.3.0 openmpi/3.1.4 cuda/10.0 python/3.7.5
+cd /glade/work/$USER/gecko-ml/applications/
 ncar_pylib ncar_20191211
-cd /glade/work/$USER/gecko-ml/
-python -u run_gecko_emulators.py -c ./config/dodecane_agg.yml >& ./run.txt
+python run_gecko_emulators.py -c ../config/dodecane_agg.yml >& ./run.txt

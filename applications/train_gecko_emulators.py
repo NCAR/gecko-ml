@@ -1,3 +1,5 @@
+import sys
+sys.path.append('../')
 from geckoml.models import DenseNeuralNetwork, LongShortTermMemoryNetwork
 from geckoml.data import combine_data, split_data, reshape_data, partition_y_output
 from sklearn.preprocessing import StandardScaler, RobustScaler, MaxAbsScaler, MinMaxScaler, QuantileTransformer

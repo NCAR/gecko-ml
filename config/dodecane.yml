@@ -1,6 +1,6 @@
 species: 'dodecane'
 dir_path: '/glade/p/cisl/aiml/gecko/ML2019_dodecane_postproc/'
-output_path: '/glade/work/cbecker/gecko-ml/save_out/'
+output_path: '/glade/work/cbecker/gecko-ml/applications/save_out/'
 summary_file: 'C02000_Exp_List_ML2019_dodecane_v1_LatinHyperCube.csv'
 aggregate_bins: False
 save_models: True
