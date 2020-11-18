@@ -64,7 +64,8 @@ def main():
                     box_preds = mod.run_ensemble(client=client, data=scaled_val_in, out_data=val_out,
                                                  num_timesteps=time_steps, num_exps=num_exps)
                     y_true, y_preds = match_true_exps(truth=val_out, preds=box_preds, num_timesteps=time_steps,
-                                                      seq_length=seq_length)
+                                                 seq_length=seq_length, aggregate_bins=config['aggregate_bins'],
+                                                 bin_prefix=config['bin_prefix'])
                     metrics[model_name + '_{}'.format(member)] = ensembled_box_metrics(y_true, y_preds)
                     plot_mae_ts(y_true, y_preds, output_path, model_name, species)
                     predictions[model_name + '_{}'.format(member)] = y_preds

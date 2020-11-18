@@ -169,7 +169,7 @@ def combine_data(dir_path, summary_file, aggregate_bins, bin_prefix,
     return df_in, df_out
 
 
-def partition_y_output(y, output_layers):
+def partition_y_output(y, output_layers, aggregate_bins=True):
     """
     Split y data into list based on number of output layers
     :param y: scaled y data (np.array)
@@ -179,11 +179,17 @@ def partition_y_output(y, output_layers):
     if (output_layers > 3) | (output_layers < 1):
         raise ValueError('Invalid number of layers. Must be either 1, 2 or 3.')
     elif output_layers == 3:
-        data = [y[:, 0].reshape(-1, 1), y[:, 1].reshape(-1, 1), y[:, 2].reshape(-1, 1)]
+        if not aggregate_bins:
+            data = [y[:, 0].reshape(-1, 1), y[:, 1:15].reshape(-1, 14), y[:, 15:].reshape(-1, 14)]
+        else:
+            data = [y[:, 0].reshape(-1, 1), y[:, 1].reshape(-1, 1), y[:, 2].reshape(-1, 1)]
     elif output_layers == 2:
-        data = [y[:, 0].reshape(-1, 1), y[:, 1:].reshape(-1, 2)]
+        if not aggregate_bins:
+            data = [y[:, 0].reshape(-1, 1), y[:, 1:].reshape(-1, 28)]
+        else:
+            data = [y[:, 0].reshape(-1, 1), y[:, 1:].reshape(-1, 2)]
     elif output_layers == 1:
-        data = [y.reshape(-1, 1)]
+        data = [y]
     return data
 
 def split_data(input_data, output_data, n_splits=2, random_state=8):

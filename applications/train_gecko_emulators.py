@@ -92,7 +92,7 @@ def main():
 
             for model_name, model_config in config['model_configurations'][model_type].items():
 
-                y = partition_y_output(scaled_out_train, model_config['output_layers'])
+                y = partition_y_output(scaled_out_train, model_config['output_layers'], aggregate_bins)
 
                 for member in range(ensemble_members):
 

@@ -111,6 +111,7 @@ class DenseNeuralNetwork(object):
             self.model.fit(x, y_class, batch_size=self.batch_size, epochs=self.epochs, verbose=self.verbose)
         else:
             self.model.fit(x, y, batch_size=self.batch_size, epochs=self.epochs, verbose=self.verbose, shuffle=True)
+            print(self.model.summary())
         return
 
     def save_fortran_model(self, filename):

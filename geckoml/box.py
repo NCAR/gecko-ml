@@ -66,7 +66,6 @@ class GeckoBoxEmulator(object):
                              temps, [time_series]*len(exps), exps)
         results = client.gather(futures)
         results_df = pd.concat(results)
-        results_df.columns = [str(x) for x in results_df.columns]
 
         return results_df
 
@@ -114,8 +113,10 @@ class GeckoBoxEmulator(object):
 
         results[:, 0] = 10 ** results[:, 0]
         results_df = pd.DataFrame(results)
+        results_df.columns = self.output_cols[1:-1]
         results_df['Time [s]'] = time_series.values
         results_df['id'] = exp
+        results_df = results_df.reindex(self.output_cols, axis=1)
 
         del mod
         tf.keras.backend.clear_session()

@@ -163,7 +163,7 @@ def ensembled_base_metrics(y_true, y_pred, ids):
 
     return metrics
 
-def match_true_exps(truth, preds, num_timesteps, seq_length):
+def match_true_exps(truth, preds, num_timesteps, seq_length, aggregate_bins, bin_prefix):
     """ Retrieve true values that match the experiments used in previous box emulator run
     Args:
         truth (DataFrame): True output data
@@ -171,14 +171,18 @@ def match_true_exps(truth, preds, num_timesteps, seq_length):
         num_timesteps (int): number of timesteps used in emulator runs to pull equivalent number from true data
         seq_length (int): Sequence length used in RNN/LSTM model
     """
+    if not aggregate_bins:
+        for prefix in bin_prefix:
+            truth[prefix] = truth.loc[:, truth.columns.str.contains(prefix, regex=False)].sum(axis=1)
+            preds[prefix] = preds.loc[:, preds.columns.str.contains(prefix, regex=False)].sum(axis=1)
+        truth = truth[['Time [s]', 'Precursor [ug/m3]', 'Gas [ug/m3]', 'Aerosol [ug_m3]', 'id']]
+        preds = preds[['Time [s]', 'Precursor [ug/m3]', 'Gas [ug/m3]', 'Aerosol [ug_m3]', 'id']]
+
     exps = preds['id'].unique()
     true_sub = truth.loc[truth['id'].isin(exps)]
     true_sub = true_sub.groupby('id').apply(lambda x: x.iloc[seq_length - 1: num_timesteps, :]).reset_index(drop=True)
-    true_sub = true_sub.sort_values(['id', 'Time [s]'])
-
+    true_sub = true_sub.sort_values(['id', 'Time [s]']).reset_index(drop=True)
     preds = preds.sort_values(['id', 'Time [s]']).reset_index(drop=True)
-    columns_dict = {x: y for x,y in zip(preds.columns[:-2], truth.columns[1:-1])}
-    preds.rename(columns=columns_dict, inplace=True)
 
     return true_sub, preds
 
@@ -205,13 +209,13 @@ def plot_ensemble(truth, preds, output_path, species, model_name):
                 axes[i, j].set_ylabel(truth.columns[i+1], fontsize=20)
             dummy_i = 0
             for key, value in preds.items():
-                p = preds[key][preds[key]['id'] == exps[j]].iloc[:, i].values
+                p = preds[key][preds[key]['id'] == exps[j]].iloc[:, i + 1].values
                 if dummy_i == 0:
                     axes[i, j].plot(p, linewidth=0.3, color=color[j], label='Ensemble Member')
                 else:
                     axes[i, j].plot(p, linewidth=0.3, color=color[j], label='')
                 dummy_i += 1
-            m = mean_ensemble[mean_ensemble['id'] == exps[j]].iloc[:, i].values
+            m = mean_ensemble[mean_ensemble['id'] == exps[j]].iloc[:, i + 1].values
             axes[i, j].plot(m, color=color[j], linewidth=2, label='Ensemble Mean')
     for i in range(3):
         axes[0, i].legend()
