@@ -10,9 +10,8 @@ import dask.dataframe as dd
 from dask import delayed
 
 scalers = {"MinMaxScaler": MinMaxScaler,
-           "MaxAbsScaler": MaxAbsScaler,
-           "StandardScaler": StandardScaler,
-           "RobustScaler": RobustScaler}
+           "StandardScaler": StandardScaler}
+
 
 def load_data(path, summary_file, species="toluene_kOH", delimiter=", ", experiment="ML2019"):
     """
@@ -22,7 +21,7 @@ def load_data(path, summary_file, species="toluene_kOH", delimiter=", ", experim
         path: Path to the directory containing summary and experiment files
         summary_file: Name of the summary file (should not contain the path)
         species: Name of the precursor chemical species
-        delimiter
+        delimiter: Delimiter for parsing data
     
     Returns:
         exp_data_merged: All time series data for every experiment in pandas DataFrame
@@ -43,6 +42,7 @@ def load_data(path, summary_file, species="toluene_kOH", delimiter=", ", experim
     exp_data_merged = pd.merge(exp_data_combined, summary_data, left_on="idnum", right_on="idnum")
     return exp_data_merged, summary_data
 
+
 def add_diurnal_signal(x_data):
     """
     Apply Function to static temperature to add +- 4 [K] diurnal signal (dependent of time [s] of timeseries).
@@ -62,7 +62,7 @@ def get_tendencies(df, output_cols):
      Transform dataframe to time tendencies rather than actual values. Preserves static environmental values.
     Args:
         df: Pre-scaled input dataframe.
-        input_cols: Input columns to be transformed (should include 'id' and 'Time' for indexing).
+        output_cols: Output columns to be transformed (should include 'id' and 'Time' for indexing).
 
     Returns: Pandas dataframe with input columns transformed to tendencies (Removes the first sample of each Exp).
     """
@@ -74,6 +74,7 @@ def get_tendencies(df, output_cols):
 
     return dff
 
+
 def convert_to_values(original, preds, output_cols, seq_length=1):
     """
     Convert tendencies back to actual values.
@@ -81,6 +82,7 @@ def convert_to_values(original, preds, output_cols, seq_length=1):
         original: Original df that was used to create tendencies
         preds: Model predictions.
         output_cols: Output columns from config.
+        seq_length: Length of sequence (for multi-time step models)
     Returns: Converted Dataframe.
     """
     original = original[output_cols].groupby('id').apply(lambda x: x.iloc[seq_length - 1:-1, :]).reset_index(drop=True)
@@ -91,6 +93,7 @@ def convert_to_values(original, preds, output_cols, seq_length=1):
 
     return converted
 
+
 def get_data_serial(file_path, summary_data, bin_prefix, input_vars, output_vars, aggregate_bins):
     """
         Load an experiment file based on a summary file; combine data from summary into experiment file
@@ -100,7 +103,7 @@ def get_data_serial(file_path, summary_data, bin_prefix, input_vars, output_vars
         summary_data: Summary dataframe
         bin_prefix: Prefix of compound volitility bins if aggregation is used
         input_vars: List of varibles to subset for input
-        ouput_vars: List of varibles to subset for ouput
+        output_vars: List of varibles to subset for ouput
         aggregate_bins: Boolean to aggregate bins
     
     Returns:
@@ -134,11 +137,16 @@ def combine_data(dir_path, summary_file, aggregate_bins, bin_prefix,
                  input_vars, output_vars, min_exp, max_exp, species):
     """
         Distribute get_serial_data() using dask to parallelize tasks and concatenate dataframes
-    
     Args:
-        summary_path: Full path of summary file
+        dir_path: Directory path for experiment files
+        summary_file: Name of summary file
+        aggregate_bins (boolean): Whether to sum data of similar type
+        bin_prefix: List of prefixes fr aggregating (if aggregate_bins is True)
+        input_vars: List of input features
+        output_vars: List of output features
         min_exp: Minimum experiment number to process
         max_exp: Maximum experiment number to process
+        species: Chemical species from config
     
     Returns:
         input_subset: Complete pandas input dataframe 
@@ -168,6 +176,7 @@ def combine_data(dir_path, summary_file, aggregate_bins, bin_prefix,
 
     return df_in, df_out
 
+
 def get_output_scaler(scaler_obj, output_vars, scaler_type='MinMaxScaler', data_range=(-1, 1)):
     """ Repopulate output scaler object with attributes from input scaler object.
     Args:
@@ -176,8 +185,7 @@ def get_output_scaler(scaler_obj, output_vars, scaler_type='MinMaxScaler', data_
         scaler_type: Sklearn scaler type from config
         data_range: data bounds for scaling from config
 
-    Returns:
-        output scaler
+    Returns: output scaler
     """
     num_features = len(output_vars[1:-1])
     if scaler_type == 'MinMaxScaler':
@@ -192,12 +200,16 @@ def get_output_scaler(scaler_obj, output_vars, scaler_type='MinMaxScaler', data_
 
     return scaler
 
+
 def partition_y_output(y, output_layers, aggregate_bins=True):
     """
     Split y data into list based on number of output layers
-    :param y: scaled y data (np.array)
-    :param output_layers: number of output layer from config file
-    :return: list of y data to be fed to fit function
+    Args:
+        y: scaled y data (np.array)
+        output_layers: number of output layer from config file
+        aggregate_bins (boolean): Whether data was aggregated (determines number of features)
+
+    Returns: list of y data to be fed to fit function
     """
     if (output_layers > 3) | (output_layers < 1):
         raise ValueError('Invalid number of layers. Must be either 1, 2 or 3.')
@@ -219,11 +231,11 @@ def partition_y_output(y, output_layers, aggregate_bins=True):
 def split_data(input_data, output_data, n_splits=2, random_state=8):
     """
     Split data, by experiment, into training/validation/testing sets for both input/output dataframes.
-
     Args:
         input_data: Complete input dataframe to process
         output_data: Complete output dataframe to process
         n_splits: Number of re-shuffling & splitting iterations
+        random_state: Random seed
     
     Returns:
         in_train: training data input as pandas df (80% total input)

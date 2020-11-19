@@ -58,10 +58,10 @@ def main():
                 for member in range(ensemble_members):
                     nnet_path = '{}models/{}_{}_{}/'.format(output_path, species, model_name, member)
                     mod = GeckoBoxEmulator(neural_net_path=nnet_path, output_scaler=y_scaler,
-                                           input_scaler=x_scaler, input_cols=input_cols, output_cols=output_cols)
+                                           input_cols=input_cols, output_cols=output_cols)
 
-                    box_preds = mod.run_ensemble(client=client, data=scaled_val_in, out_data=val_out,
-                                                 num_timesteps=time_steps, num_exps=num_exps)
+                    box_preds = mod.run_ensemble(client=client, data=scaled_val_in, num_timesteps=time_steps,
+                                                 num_exps=num_exps)
                     y_true, y_preds = match_true_exps(truth=val_out, preds=box_preds, num_timesteps=time_steps,
                                                  seq_length=seq_length, aggregate_bins=config['aggregate_bins'],
                                                  bin_prefix=config['bin_prefix'])
@@ -78,9 +78,9 @@ def main():
                 for member in range(ensemble_members):
                     nnet_path = '{}models/{}_{}_{}/'.format(output_path, species, model_name, member)
                     mod = GeckoBoxEmulatorTS(neural_net_path=nnet_path, output_scaler=y_scaler, seq_length=seq_length,
-                                             input_cols=input_cols, output_cols=output_cols)
-                    box_preds = mod.run_ensemble(client=client, data=scaled_val_in, out_data=val_out,
-                                                 num_timesteps=time_steps, num_exps=num_exps)
+                                                 input_cols=input_cols, output_cols=output_cols)
+                    box_preds = mod.run_ensemble(client=client, data=scaled_val_in, num_timesteps=time_steps,
+                                                 num_exps=num_exps)
                     y_true, y_preds = match_true_exps(truth=val_out, preds=box_preds, num_timesteps=time_steps,
                                                  seq_length=seq_length, aggregate_bins=config['aggregate_bins'],
                                                  bin_prefix=config['bin_prefix'])

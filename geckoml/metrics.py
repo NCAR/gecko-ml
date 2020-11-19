@@ -172,6 +172,8 @@ def match_true_exps(truth, preds, num_timesteps, seq_length, aggregate_bins, bin
         preds (DataFrame): Predicted output data
         num_timesteps (int): number of timesteps used in emulator runs to pull equivalent number from true data
         seq_length (int): Sequence length used in RNN/LSTM model
+        aggregate_bins (boolean): Whether or not to aggregate data (determines number of features)
+        bin_prefix (list): List of strings to aggregate on if aggregate_bins is True
     """
     if not aggregate_bins:
         for prefix in bin_prefix:
@@ -191,6 +193,12 @@ def match_true_exps(truth, preds, num_timesteps, seq_length, aggregate_bins, bin
 
 def plot_ensemble(truth, preds, output_path, species, model_name):
     """ Plot ensemble members, ensemble mean, and truth from 3 randomly selected experiments.
+    Args:
+        truth: Validation dataframe for selected experiments
+        preds: Validation dataframe of emulated results for selected experiments
+        output_path: Path to save output
+        species: Species (from config) used for labeling
+        model_name: Model Name (used for labeling)
     """
     all_exps = truth['id'].unique()
     exps = np.random.choice(all_exps, 3, replace=False)

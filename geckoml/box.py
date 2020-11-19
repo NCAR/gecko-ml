@@ -16,14 +16,15 @@ class GeckoBoxEmulator(object):
 
     Attributes:
           neural_net_path (str): Path to saved neural network.
-          input_scaler (str): X Scaler object used on data to train the neural network.
           output_scaler (str): Y Scaler object used on data to train the neural network.
+          input_cols (list): Columns used as input into model
+          output_cols (list): Columns used as output to model
+          seed (int): Random seed
     """
 
-    def __init__(self, neural_net_path, input_scaler, output_scaler, input_cols, output_cols, seed=8176):
+    def __init__(self, neural_net_path, output_scaler, input_cols, output_cols, seed=8176):
 
         self.neural_net_path = neural_net_path
-        self.input_cols = input_cols
         self.output_scaler = output_scaler
         self.input_cols = input_cols
         self.output_cols = output_cols
@@ -31,12 +32,12 @@ class GeckoBoxEmulator(object):
 
         return
 
-    def run_ensemble(self, client, data, out_data, num_timesteps, num_exps='all'):
+    def run_ensemble(self, client, data, num_timesteps, num_exps='all'):
         """
         Run an ensemble of GECKO-A experiment emulations distributed over a cluster using dask distributed.
         Args:
             client: Dask distributed TCP client
-            data (DataFrame): Validation/testing dataframe split by experiment.
+            data (numpy array): Scaled input Validation/testing dataframe, split by experiment.
             num_timesteps (int): Number of timesteps to run each emulation forward.
             num_exps (int or 'all'): Number of experiments to run. Defaults to 'all' within data provided. If (int),
                     choose experiments randomly from those available.
@@ -56,28 +57,25 @@ class GeckoBoxEmulator(object):
             data_sub = data[data['id'] == x].iloc[:, 1:-1].copy()
             data_sub.columns = self.input_cols[1:-1]
             temperature_ts = data_sub['temperature (K)'][1:].values
-            iv = out_data[out_data['id'] == x].iloc[0, 1:-1].values
             sc = data_sub.iloc[0:1, :].values
             starting_conds.append(sc)
-            initial_out_values.append(iv)
             temps.append(temperature_ts)
 
-        futures = client.map(self.predict, starting_conds, [num_timesteps]*len(exps), initial_out_values,
-                             temps, [time_series]*len(exps), exps)
+        futures = client.map(self.predict, starting_conds, [num_timesteps]*len(exps), temps,
+                             [time_series]*len(exps), exps)
         results = client.gather(futures)
         results_df = pd.concat(results)
 
         return results_df
 
-    def predict(self, starting_conds, num_timesteps, initial_val, temps, time_series, exp):
+    def predict(self, starting_conds, num_timesteps, temps, time_series, exp):
         """ Run emulation of single experiment given initial conditions.
         Args:
             starting_conds (DataFrame): DataFrame of initial conditions.
             num_timesteps (int): Length of timesteps to run emulation.
+            temps (Pandas Series): Timeseries of diurnally varying temperatures for respective experiment.
             time_series (Pandas Series): Pandas 'Time' column from experiment data.
-            starting_ts (int): Timestep number to start emulation (should match starting conditions). Defaults to 0.
-            seq_length (int): Number of timesteps to use for single prediction. Must match the data shape used to
-                    train the neural network. Most RNN/LSTM will be > 1. Defaults to 1.
+            exp: Experiment number
 
         Returns:
             results (DataFrame): Pandas dataframe of emulated values with time stamps.
@@ -184,12 +182,12 @@ class GeckoBoxEmulatorTS(object):
 
         return
 
-    def run_ensemble(self, client, data, out_data, num_timesteps, num_exps='all'):
+    def run_ensemble(self, client, data, num_timesteps, num_exps='all'):
         """
         Run an ensemble of GECKO-A experiment emulations distributed over a cluster using dask distributed.
         Args:
             client: Dask distributed TCP client.
-            data (DataFrame): Validation/testing dataframe split by experiment.
+            data (numpy array): Scaled Validation/testing data, split by experiment.
             num_timesteps (int): Number of timesteps to run each emulation forward.
             num_exps (int or 'all'): Number of experiments to run. Defaults to 'all' within data provided. If (int),
                     choose experiments randomly from those available.
@@ -210,24 +208,23 @@ class GeckoBoxEmulatorTS(object):
             data_sub.columns = self.input_cols[1:-1]
             sc = self.get_starting_conds_ts(data_sub)
             temperature_ts = data_sub['temperature (K)'][self.seq_length:].values
-            iv = out_data[out_data['id'] == x].iloc[self.seq_length - 1, 1:-1].values
             starting_conds.append(sc)
-            initial_out_values.append(iv)
             temps.append(temperature_ts)
 
-        futures = client.map(self.predict_ts, starting_conds, [num_timesteps] * len(exps), initial_out_values,
-                             temps, [time_series] * len(exps), exps)
+        futures = client.map(self.predict_ts, starting_conds, [num_timesteps] * len(exps), temps,
+                             [time_series] * len(exps), exps)
         results = client.gather(futures)
         results_df = pd.concat(results)
         results_df.columns = [str(x) for x in results_df.columns]
 
         return results_df
 
-    def predict_ts(self, starting_conds, num_timesteps, initial_val, temps, time_series, exp):
+    def predict_ts(self, starting_conds, num_timesteps, temps, time_series, exp):
         """ Run emulation of single experiment given initial conditions.
         Args:
             starting_conds (DataFrame): DataFrame of initial conditions.
-            num_timesteps (int): Length of timesteps to run emulation.
+            num_timesteps (int): Length of time steps to run emulation.
+            temps (Pandas Series): Time series of diurnally varying temperatures for respective experiment.
             time_series (Pandas Series): Pandas 'Time' column from experiment data.
             exp (Pandas Series): Series of Experiment ID
 

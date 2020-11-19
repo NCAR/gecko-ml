@@ -18,20 +18,26 @@ class DenseNeuralNetwork(object):
     Attributes:
         hidden_layers: Number of hidden layers
         hidden_neurons: Number of neurons in each hidden layer
-        inputs: Number of input values
-        outputs: Number of output values
         activation: Type of activation function
+        output_layers: Number of output layers (1, 2, or 3)
         output_activation: Activation function applied to the output layer
         optimizer: Name of optimizer or optimizer object.
-        loss: Name of loss function or loss object
+        loss: Name of loss functions or loss objects (can match up to number of output layers)
+        loss_weights: Weights to be assigned to respective loss/output layer
         use_noise: Whether or not additive Gaussian noise layers are included in the network
         noise_sd: The standard deviation of the Gaussian noise layers
+        lr: Learning rate for optimizer
         use_dropout: Whether or not Dropout layers are added to the network
         dropout_alpha: proportion of neurons randomly set to 0.
         batch_size: Number of examples per batch
         epochs: Number of epochs to train
-        verbose: Level of detail to provide during training
-        model: Keras Model object
+        l2_weight: L2 weight parameter
+        sgd_momentum: SGD optimizer momentum parameter
+        adam_beta_1: Adam optimizer beta_1 parameter
+        adam_beta_2: Adam optimizer beta_2 parameter
+        decay: Level of decay to apply to learning rate
+        verbose: Level of detail to provide during training (0 = None, 1 = Minimal, 2 = All)
+        classifier: (boolean) If training on classes
     """
     def __init__(self, hidden_layers=1, hidden_neurons=4, activation="relu", output_layers=1,
                  output_activation="linear", optimizer="adam", loss="mse", loss_weights=1, use_noise=False,
@@ -146,25 +152,30 @@ class DenseNeuralNetwork(object):
 
 class LongShortTermMemoryNetwork(object):
     """
-    A Long Short Term Memory Model that can support arbitrary numbers of hidden layers.
+    A Long Short-Term Memory Neural Network Model that can support arbitrary numbers of hidden layers.
 
     Attributes:
         hidden_layers: Number of hidden layers
         hidden_neurons: Number of neurons in each hidden layer
-        inputs: Number of input values
-        outputs: Number of output values
         activation: Type of activation function
+        output_layers: Number of output layers (1, 2, or 3)
         output_activation: Activation function applied to the output layer
         optimizer: Name of optimizer or optimizer object.
-        loss: Name of loss function or loss object
+        loss: Name of loss functions or loss objects (can match up to number of output layers)
+        loss_weights: Weights to be assigned to respective loss/output layer
         use_noise: Whether or not additive Gaussian noise layers are included in the network
         noise_sd: The standard deviation of the Gaussian noise layers
+        lr: Learning rate for optimizer
         use_dropout: Whether or not Dropout layers are added to the network
         dropout_alpha: proportion of neurons randomly set to 0.
         batch_size: Number of examples per batch
         epochs: Number of epochs to train
-        verbose: Level of detail to provide during training
-        model: Keras Model object
+        l2_weight: L2 weight parameter
+        sgd_momentum: SGD optimizer momentum parameter
+        adam_beta_1: Adam optimizer beta_1 parameter
+        adam_beta_2: Adam optimizer beta_2 parameter
+        decay: Level of decay to apply to learning rate
+        verbose: Level of detail to provide during training (0 = None, 1 = Minimal, 2 = All)
     """
     def __init__(self, hidden_layers=1, hidden_neurons=50, activation="relu", output_layers=1,
                  output_activation="linear", optimizer="adam", loss="mse", loss_weights=1,
