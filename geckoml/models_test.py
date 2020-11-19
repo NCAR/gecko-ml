@@ -18,7 +18,7 @@ def test_denseneuralnetwork():
 
 #test load data  
 def test_loaddata():
-    df = pd.read_csv("/glade/p/cisl/aiml/gecko/ML2019_dodecane_postproc/ML2019_dodecane_ML2019_Exp54.csv", skiprows = 3) 
+    df = pd.read_csv("test_data.csv", skiprows = 3) 
     assert not df.isnull().values.any()
     assert not df.isna().values.any()
     assert df.shape[0] == 1437
