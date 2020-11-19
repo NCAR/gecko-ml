@@ -168,6 +168,29 @@ def combine_data(dir_path, summary_file, aggregate_bins, bin_prefix,
 
     return df_in, df_out
 
+def get_output_scaler(scaler_obj, output_vars, scaler_type='MinMaxScaler', data_range=(-1, 1)):
+    """ Repopulate output scaler object with attributes from input scaler object.
+    Args:
+        scaler_obj: Input (x) scaler object
+        output_vars: list of output variables from config
+        scaler_type: Sklearn scaler type from config
+        data_range: data bounds for scaling from config
+
+    Returns:
+        output scaler
+    """
+    num_features = len(output_vars[1:-1])
+    if scaler_type == 'MinMaxScaler':
+        scaler = MinMaxScaler(data_range)
+        setattr(scaler, 'scale_', scaler_obj.scale_[0:num_features])
+        setattr(scaler, 'min_', scaler_obj.min_[0:num_features])
+
+    elif scaler_type == 'StandardScaler':
+        scaler = StandardScaler(data_range)
+        setattr(scaler, 'scale_', scaler_obj.scale_[0:num_features])
+        setattr(scaler, 'mean_', scaler_obj.mean_[0:num_features])
+
+    return scaler
 
 def partition_y_output(y, output_layers, aggregate_bins=True):
     """

@@ -227,9 +227,8 @@ class LongShortTermMemoryNetwork(object):
         nn_model_out = {}
         for i in range(len(outputs)):
             nn_model_out[i] = LSTM(outputs[i],
-                             activation=self.output_activation, name=f"dense_out{i:02d}")(nn_model)
+                             activation=self.output_activation, name=f"lstm_out{i:02d}")(nn_model)
         output_layers = [x for x in nn_model_out.values()]
-        #nn_model = LSTM(outputs, name=f"lstm_{self.hidden_layers:02d}")(nn_model)
         self.model = Model(nn_input, output_layers)
         if self.optimizer == "adam":
             self.optimizer_obj = Adam(lr=self.lr, beta_1=self.adam_beta_1, beta_2=self.adam_beta_2, decay=self.decay)
@@ -253,7 +252,7 @@ class LongShortTermMemoryNetwork(object):
             self.model.fit(x, y_class, batch_size=self.batch_size, epochs=self.epochs, verbose=self.verbose)
         else:
             self.model.fit(x, y, batch_size=self.batch_size, epochs=self.epochs, verbose=self.verbose, shuffle=True)
-
+            print(self.model.summary())
         return
 
     def save_fortran_model(self, filename):

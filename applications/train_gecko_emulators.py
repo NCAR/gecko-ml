@@ -1,10 +1,9 @@
 import sys
 sys.path.append('../')
 from geckoml.models import DenseNeuralNetwork, LongShortTermMemoryNetwork
-from geckoml.data import combine_data, split_data, reshape_data, partition_y_output
+from geckoml.data import combine_data, split_data, reshape_data, partition_y_output, get_output_scaler
 from sklearn.preprocessing import StandardScaler, RobustScaler, MaxAbsScaler, MinMaxScaler, QuantileTransformer
 from geckoml.metrics import ensembled_base_metrics
-from sklearn.pipeline import Pipeline
 import tensorflow as tf
 import time
 import joblib
@@ -23,11 +22,7 @@ for folder in ['models', 'plots', 'validation_data']:
     os.makedirs(os.path.join('./save_out', folder), exist_ok=True)
 
 scalers = {"MinMaxScaler": MinMaxScaler,
-           "MaxAbsScaler": MaxAbsScaler,
-           "StandardScaler": StandardScaler,
-           "RobustScaler": RobustScaler,
-           "QuantileTransformer": QuantileTransformer}
-
+           "StandardScaler": StandardScaler}
 
 def main():
     # read YAML config as provided arg
@@ -61,19 +56,15 @@ def main():
     in_train, out_train, in_val, out_val, in_test, out_test = split_data(
         input_data=input_data, output_data=output_data, random_state=seed)
 
-    # Rescale training and validation / testing data
-    if scaler_type == 'QuantileTransformer':
-        x_scaler = Pipeline(steps=[('quant', QuantileTransformer()), ('minmax', MinMaxScaler((0, 1)))])
-        y_scaler = Pipeline(steps=[('quant', QuantileTransformer()), ('minmax', MinMaxScaler((0, 1)))])
-    else:
-
-        x_scaler, y_scaler = scalers[scaler_type]((-1, 1)), scalers[scaler_type]((-1, 1))
-
     num_timesteps = in_train['Time [s]'].nunique()
 
+    # Rescale training and validation / testing data
+    x_scaler = scalers[scaler_type]((-1, 1))
     scaled_in_train = x_scaler.fit_transform(in_train.drop(['Time [s]', 'id'], axis=1))
-    scaled_out_train = y_scaler.fit_transform(out_train.drop(['Time [s]', 'id'], axis=1))
     scaled_in_val = x_scaler.transform(in_val.drop(['Time [s]', 'id'], axis=1))
+
+    y_scaler = get_output_scaler(x_scaler, output_vars, scaler_type, data_range=(-1, 1))
+    scaled_out_train = y_scaler.transform(out_train.drop(['Time [s]', 'id'], axis=1))
     scaled_out_val = y_scaler.transform(out_val.drop(['Time [s]', 'id'], axis=1))
 
     val_ids = in_val['id'].values
