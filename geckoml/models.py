@@ -33,9 +33,9 @@ class DenseNeuralNetwork(object):
         verbose: Level of detail to provide during training
         model: Keras Model object
     """
-    def __init__(self, hidden_layers=1, hidden_neurons=4, activation="relu", output_layers=1, loss_weights=[1, 1, 1],
-                 output_activation="linear", optimizer="adam", loss="mse", use_noise=False, noise_sd=0.01,
-                 lr=0.001, use_dropout=False, dropout_alpha=0.1, batch_size=128, epochs=2,
+    def __init__(self, hidden_layers=1, hidden_neurons=4, activation="relu", output_layers=1,
+                 output_activation="linear", optimizer="adam", loss="mse", loss_weights=1, use_noise=False,
+                 noise_sd=0.01, lr=0.001, use_dropout=False, dropout_alpha=0.1, batch_size=128, epochs=2,
                  l2_weight=0.01, sgd_momentum=0.9, adam_beta_1=0.9, adam_beta_2=0.999, decay=0, verbose=0,
                  classifier=False):
         self.hidden_layers = hidden_layers
@@ -63,7 +63,6 @@ class DenseNeuralNetwork(object):
         self.classifier = classifier
         self.y_labels = None
         self.model = None
-        self.optimizer_obj = None
 
     def build_neural_network(self, inputs, outputs):
         """
@@ -167,14 +166,15 @@ class LongShortTermMemoryNetwork(object):
         verbose: Level of detail to provide during training
         model: Keras Model object
     """
-    def __init__(self, hidden_layers=1, hidden_neurons=50, activation="relu",
-                 output_activation="linear", optimizer="adam", loss="mse", use_noise=False, noise_sd=0.01,
-                 lr=0.001, use_dropout=False, dropout_alpha=0.1, batch_size=128, epochs=2,
-                 l2_weight=0.01, sgd_momentum=0.9, adam_beta_1=0.9, adam_beta_2=0.999, decay=0, verbose=0,
+    def __init__(self, hidden_layers=1, hidden_neurons=50, activation="relu", output_layers=1,
+                 output_activation="linear", optimizer="adam", loss="mse", loss_weights=1,
+                 use_noise=False, noise_sd=0.01, lr=0.001, use_dropout=False, dropout_alpha=0.1, batch_size=128,
+                 epochs=2, l2_weight=0.01, sgd_momentum=0.9, adam_beta_1=0.9, adam_beta_2=0.999, decay=0, verbose=0,
                  classifier=False):
         self.hidden_layers = hidden_layers
         self.hidden_neurons = hidden_neurons
         self.activation = activation
+        self.output_layers = output_layers
         self.output_activation = output_activation
         self.optimizer = optimizer
         self.optimizer_obj = None
@@ -182,11 +182,13 @@ class LongShortTermMemoryNetwork(object):
         self.adam_beta_1 = adam_beta_1
         self.adam_beta_2 = adam_beta_2
         self.loss = loss
+        self.loss_weights = loss_weights
         self.lr = lr
         self.l2_weight = l2_weight
         self.batch_size = batch_size
         self.use_noise = use_noise
         self.noise_sd = noise_sd
+        self.use_dropout = use_dropout
         self.dropout_alpha = dropout_alpha
         self.epochs = epochs
         self.decay = decay
@@ -194,7 +196,6 @@ class LongShortTermMemoryNetwork(object):
         self.classifier = classifier
         self.y_labels = None
         self.model = None
-        self.optimizer_obj = None
 
     def build_neural_network(self, seq_input, inputs, outputs):
         """
@@ -223,22 +224,24 @@ class LongShortTermMemoryNetwork(object):
                 nn_model = SeqSelfAttention()(nn_model)
             if self.use_noise:
                 nn_model = GaussianNoise(self.noise_sd, name=f"ganoise_h_{h:02d}")(nn_model)
-        nn_model = LSTM(outputs, name=f"lstm_{self.hidden_layers:02d}")(nn_model)
-        self.model = Model(nn_input, nn_model)
+        nn_model_out = {}
+        for i in range(len(outputs)):
+            nn_model_out[i] = LSTM(outputs[i],
+                             activation=self.output_activation, name=f"dense_out{i:02d}")(nn_model)
+        output_layers = [x for x in nn_model_out.values()]
+        #nn_model = LSTM(outputs, name=f"lstm_{self.hidden_layers:02d}")(nn_model)
+        self.model = Model(nn_input, output_layers)
         if self.optimizer == "adam":
             self.optimizer_obj = Adam(lr=self.lr, beta_1=self.adam_beta_1, beta_2=self.adam_beta_2, decay=self.decay)
         elif self.optimizer == "sgd":
             self.optimizer_obj = SGD(lr=self.lr, momentum=self.sgd_momentum, decay=self.decay)
-        self.model.compile(optimizer=self.optimizer, loss=self.loss)
+        self.model.compile(optimizer=self.optimizer_obj, loss=self.loss, loss_weights=self.loss_weights)
 
     def fit(self, x, y):
 
         lookback = x.shape[1]
         n_features = x.shape[2]
-        if len(y.shape) == 1:
-            outputs = 1
-        else:
-            outputs = y.shape[1]
+        outputs = [i.shape[-1] for i in y]
         if self.classifier:
             outputs = np.unique(y).size
         self.build_neural_network(lookback, n_features, outputs)
@@ -277,6 +280,6 @@ class LongShortTermMemoryNetwork(object):
             y_prob = self.model.predict(x, batch_size=self.batch_size)
             y_out = self.y_labels[np.argmax(y_prob, axis=1)].ravel()
         else:
-            y_out = self.model.predict(x, batch_size=self.batch_size)
+            y_out = np.block(self.model.predict(x, batch_size=self.batch_size))
         return y_out
 

@@ -107,10 +107,12 @@ def main():
 
             for model_name, model_config in config['model_configurations'][model_type].items():
 
+                y = partition_y_output(scaled_out_train_ts, model_config['output_layers'], aggregate_bins)
+
                 for member in range(ensemble_members):
 
                     models[model_name + '_{}'.format(member)] = LongShortTermMemoryNetwork(**model_config)
-                    models[model_name + '_{}'.format(member)].fit(scaled_in_train_ts, scaled_out_train_ts)
+                    models[model_name + '_{}'.format(member)].fit(scaled_in_train_ts, y)
                     preds = models[model_name + '_{}'.format(member)].predict(scaled_in_val_ts)
                     transformed_preds = pd.DataFrame(y_scaler.inverse_transform(preds))
                     metrics[model_name + '_{}'.format(member)] = ensembled_base_metrics(
