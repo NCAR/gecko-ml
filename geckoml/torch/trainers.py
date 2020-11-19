@@ -248,43 +248,52 @@ class BoxBaseTrainer:
         val_loss = []
         for epoch in range(self.start_epoch, self.epochs):
             try:
-                train_loss = self.train_one_epoch(epoch)
+                train_loss = self.train_one_epoch(epoch)                
                 test_loss = self.test(epoch)
-
-                if trial:
-                    trial.report(test_loss, step=epoch+1)
-                scheduler.step(test_loss if flag else epoch)
-                early_stopping(epoch, test_loss, self.model, self.optimizer)
-
-                # Write results to the callback logger 
-                result = {
-                    "epoch": epoch,
-                    "train_loss": train_loss,
-                    "valid_loss": test_loss,
-                    "lr": early_stopping.print_learning_rate(self.optimizer),
-                    "teacher_forcing_score": self.tf_annealer(epoch) if self.teacher_force else 1.0
-                }
-                metrics_logger.update(result)
-                val_loss.append(test_loss)
-            
             except Exception as E: # CUDA memory overflow
                 if "CUDA" in str(E):
                     logger.info(
                         "Failed to train the model due to GPU memory overflow."
                     )
-                    raise optuna.TrialPruned() if trial else OSError(f"{str(E)}")
+                    raise ValueError(f"{str(E)}") # FAIL the trial, but do not stop the study
                 else:
-                    raise OSError(f"{str(E)}")
+                    raise OSError(f"{str(E)}") # FAIL the trial and stop the study
+                    
+            test_loss = math.inf if not test_loss else test_loss
+            test_loss = math.inf if test_loss == float("nan") else test_loss
+                    
+            if not isinstance(test_loss, float):
+                raise ValueError(f"The test loss was {test_loss} e.g. not a float -- FAILING this trial.")
+                
+            if not np.isfinite(test_loss):
+                logger.info(f"Pruning this trial at epoch {epoch} with loss {test_loss}")
+                raise optuna.TrialPruned()
+                    
+            scheduler.step(test_loss if flag else epoch)
+            early_stopping(epoch, test_loss, self.model, self.optimizer)
+
+            # Write results to the callback logger 
+            result = {
+                "epoch": epoch,
+                "train_loss": train_loss,
+                "valid_loss": test_loss,
+                "lr": early_stopping.print_learning_rate(self.optimizer),
+                "teacher_forcing_score": self.tf_annealer(epoch) if self.teacher_force else 1.0
+            }
+            metrics_logger.update(result)
+            val_loss.append(test_loss)
             
             if trial:
+                trial.report(test_loss, step=epoch+1)
                 if trial.should_prune():
+                    logger.info(f"Pruning this trial at epoch {epoch} with loss {test_loss}")
                     raise optuna.TrialPruned()
 
             if early_stopping.early_stop:
-                logger.info("Early stopping")
+                logger.info("Stopping early")
                 break
                 
-        return np.mean(val_loss)
+        return min(val_loss)
     
 
     def tf_annealer(self, epoch):
