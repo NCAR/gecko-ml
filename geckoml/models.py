@@ -93,7 +93,7 @@ class DenseNeuralNetwork(object):
         nn_model_out = {}
         for i in range(len(outputs)):
             nn_model_out[i] = Dense(outputs[i],
-                             activation=self.output_activation, name=f"dense_out{i:02d}")(nn_model)
+                             activation=self.output_activation, name=f"dense_out_{i:02d}")(nn_model)
         output_layers = [x for x in nn_model_out.values()]
         self.model = Model(nn_input, output_layers)
         if self.optimizer == "adam":
@@ -120,22 +120,45 @@ class DenseNeuralNetwork(object):
         return
 
     def save_fortran_model(self, filename):
+
         nn_ds = xr.Dataset()
-        num_dense = 0
-        layer_names = []
+        num_dense, num_dense_out = 0, 0
+        layer_names, out_bias, out_weights = [], [], []
+
         for layer in self.model.layers:
-            if "dense" in layer.name:
+
+            if "dense" in layer.name and "out" not in layer.name:
                 layer_names.append(layer.name)
                 dense_weights = layer.get_weights()
                 nn_ds[layer.name + "_weights"] = ((layer.name + "_in", layer.name + "_out"), dense_weights[0])
                 nn_ds[layer.name + "_bias"] = ((layer.name + "_out",), dense_weights[1])
                 nn_ds[layer.name + "_weights"].attrs["name"] = layer.name
-                nn_ds[layer.name + "_weights"].attrs["activation"] = layer.get_config()["activation"]
+                nn_ds[layer.name + "_weights"].attrs["activation"] = str(layer.get_config()["activation"])
                 num_dense += 1
+
+            elif "dense" in layer.name and "out" in layer.name:
+                dense_weights = layer.get_weights()
+                out_weights.append(dense_weights[0])
+                out_bias.append(dense_weights[1])
+                num_dense_out += 1
+
+        layer_names.append(self.model.layers[-num_dense_out].name)
+        concatenated_weights = np.concatenate(out_weights, axis=1)
+        concatenated_bias = np.concatenate(out_bias)
+        nn_ds[self.model.layers[-num_dense_out].name + "_weights"] = (
+            (self.model.layers[-num_dense_out].name + "_in", self.model.layers[-num_dense_out].name + "_out"),
+            concatenated_weights)
+        nn_ds[self.model.layers[-num_dense_out].name + "_bias"] = (
+            (self.model.layers[-num_dense_out].name + "_out",), concatenated_bias)
+        nn_ds[self.model.layers[-num_dense_out].name + "_weights"].attrs["name"] = \
+            self.model.layers[-num_dense_out].name
+        nn_ds[self.model.layers[-num_dense_out].name + "_weights"].attrs["activation"] = \
+            self.model.layers[-num_dense_out].get_config()["activation"]
+        num_dense += 1
         nn_ds["layer_names"] = (("num_layers",), np.array(layer_names))
         nn_ds.attrs["num_layers"] = num_dense
         nn_ds.to_netcdf(filename, encoding={'layer_names': {'dtype': 'S1'}})
-        return
+        return nn_ds
 
     def predict(self, x):
         if self.classifier:
@@ -238,7 +261,7 @@ class LongShortTermMemoryNetwork(object):
         nn_model_out = {}
         for i in range(len(outputs)):
             nn_model_out[i] = LSTM(outputs[i],
-                             activation=self.output_activation, name=f"lstm_out{i:02d}")(nn_model)
+                             activation=self.output_activation, name=f"lstm_out_{i:02d}")(nn_model)
         output_layers = [x for x in nn_model_out.values()]
         self.model = Model(nn_input, output_layers)
         if self.optimizer == "adam":
