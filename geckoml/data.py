@@ -57,6 +57,28 @@ def add_diurnal_signal(x_data):
     return x_data
 
 
+def log_transform(dataframe, cols_to_transform):
+    """
+    Perform log 10 transformation of specified columns
+    Args:
+        dataframe: full dataframe
+        cols_to_transform: list of columns to perform transformation on 
+    """
+    dataframe[cols_to_transform] = np.log10(dataframe[cols_to_transform])
+    return dataframe
+
+
+def inverse_log_transform(dataframe, cols_to_transform):
+    """
+    Perform inverse log 10 transformation of specified columns
+    Args:
+        dataframe: full dataframe
+        cols_to_transform: list of columns to perform transformation on 
+    """
+    dataframe[cols_to_transform] = 10 ** dataframe[cols_to_transform]
+    return dataframe
+
+
 def get_tendencies(df, output_cols):
     """
      Transform dataframe to time tendencies rather than actual values. Preserves static environmental values.
@@ -170,8 +192,9 @@ def combine_data(dir_path, summary_file, aggregate_bins, bin_prefix,
     
     df_in = ddf_in.compute(scheduler='processes').reset_index() # transform back to pandas df
     df_out = ddf_out.compute(scheduler='processes').reset_index()
-    df_in['Precursor [ug/m3]'] = np.log10(df_in['Precursor [ug/m3]'])
-    df_out['Precursor [ug/m3]'] = np.log10(df_out['Precursor [ug/m3]'])
+    df_in = log_transform(df_in, ['Precursor [ug/m3]'])
+    df_out = log_transform(df_out, ['Precursor [ug/m3]'])
+
     del df_in['index'], df_out['index']
 
     return df_in, df_out

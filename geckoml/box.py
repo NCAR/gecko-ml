@@ -4,6 +4,7 @@ import gc
 import tensorflow as tf
 from tensorflow.keras.models import load_model
 from tensorflow.python.framework.ops import disable_eager_execution
+from .data import inverse_log_transform
 
 disable_eager_execution()
 
@@ -109,12 +110,12 @@ class GeckoBoxEmulator(object):
                     new_input[:, :-num_env_vars] = pred
                     new_input[:, 3] = temps[i]
 
-        results[:, 0] = 10 ** results[:, 0]
         results_df = pd.DataFrame(results)
         results_df.columns = self.output_cols[1:-1]
         results_df['Time [s]'] = time_series.values
         results_df['id'] = exp
         results_df = results_df.reindex(self.output_cols, axis=1)
+        results_df = inverse_log_transform(results_df, ['Precursor [ug/m3]'])
 
         del mod
         tf.keras.backend.clear_session()
@@ -264,12 +265,12 @@ class GeckoBoxEmulatorTS(object):
                     x = new_input[:, 1:, :]
                     new_input = np.concatenate([x, new_input_single], axis=1)
 
-        results[:, 0] = 10 ** results[:, 0]
         results_df = pd.DataFrame(results)
         results_df.columns = self.output_cols[1:-1]
         results_df['Time [s]'] = time_series.values
         results_df['id'] = exp
         results_df = results_df.reindex(self.output_cols, axis=1)
+        results_df = inverse_log_transform(results_df, ['Precursor [ug/m3]'])
 
         del mod
         tf.keras.backend.clear_session()

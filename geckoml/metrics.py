@@ -1,9 +1,11 @@
-from sklearn.metrics import mean_squared_error
+from sklearn.metrics import mean_squared_error, mean_absolute_error
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from os.path import join
+from .data import inverse_log_transform
 
 def calc_pdf_hist(x, x_bins):
     """ Calculate Probability Density Function. Normalized as the integral over the range == 1
@@ -33,6 +35,13 @@ def root_mean_squared_error(y_true, y_pred):
     """
     return np.sqrt(mean_squared_error(y_true, y_pred))
 
+def mean_abs_error(y_true, y_pred):
+    """ Calculate the Mean Absolute Error
+    Args:
+        y_true (np.array): True output data
+        y_pred (np.array): Predicted output data
+    """
+    return mean_absolute_error(y_true, y_pred)
 
 def hellinger_distance(y_true, y_pred, bins=50):
     """ Calculate Hellenger distance between two distributions
@@ -102,7 +111,7 @@ def plot_mae_ts(y_true, y_pred, output_path, model_name, species):
     ax = mae.plot()
     ax.set_title('{} - MAE per Timestep'.format(model_name))
     fig = ax.get_figure()
-    fig.savefig('{}plots/{}_{}_mae_ts.png'.format(output_path, species, model_name), bbox_inches='tight')
+    fig.savefig(join(output_path, 'plots', f'{species}_{model_name}_mae_ts.png'))
 
 def ensembled_box_metrics(y_true, y_pred):
     """ Call a variety of metrics to be calculated (Hellenger distance R2, and RMSE currently) on Box emulator results.
@@ -129,11 +138,14 @@ def ensembled_box_metrics(y_true, y_pred):
         truth = y_true.sort_values(['id', 'Time [s]'], ascending=True).iloc[:, 1:-1].values
 
     metrics = {}
-    rmse_l, r2_l, hd_l = [], [], []
+    rmse_l, mae_l, r2_l, hd_l = [], [], [], []
 
     for i in np.arange(3):
         rmse_l.append(root_mean_squared_error(truth[:, i], preds[:, i]))
     metrics['RMSE'] = rmse_l
+    for i in np.arange(3):
+        mae_l.append(mean_abs_error(truth[:, i], preds[:, i]))
+    metrics['MAE'] = mae_l
     for i in np.arange(3):
         r2_l.append(r2_corr(truth[:, i], preds[:, i]))
     metrics['R2'] = r2_l
@@ -153,10 +165,14 @@ def ensembled_base_metrics(y_true, y_pred, ids, seq_length=1):
     """
     if seq_length > 1:
         y_true = y_true.groupby('id').apply(lambda x: x.iloc[(seq_length - 1):, :])
+    y_pred.columns = y_true.columns[1:-1]
     y_pred['id'] = ids
+    y_pred['Time [s]'] = y_true['Time [s]'].values
+    y_pred = y_pred.reindex(y_true.columns, axis=1)
+    y_pred = inverse_log_transform(y_pred, ['Precursor [ug/m3]'])
     y_true = y_true.iloc[:, 1:-1].values
-    y_pred = y_pred.iloc[:, :-1].values
-    y_pred[:, 0] = 10 ** y_pred[:, 0]
+    y_pred = y_pred.iloc[:, 1:-1].values
+
     metrics = {}
 
     metrics['RMSE'] = root_mean_squared_error(y_true, y_pred)
@@ -230,4 +246,4 @@ def plot_ensemble(truth, preds, output_path, species, model_name):
     for i in range(3):
         axes[0, i].legend()
 
-    plt.savefig('{}plots/{}_{}_ensembled_exps.png'.format(output_path, species, model_name), bbox_inches='tight')
+    plt.savefig(join(output_path, 'plots', f'{species}_{model_name}_ensemble.png'), bbox_inches='tight')
