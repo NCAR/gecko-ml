@@ -12,19 +12,15 @@ import argparse
 import numpy as np
 import yaml
 import os
+from os.path import join
 
-start = time.time()
-seed = 8886
-#np.random.seed(seed)
-#tf.random.set_seed(seed)
-
-for folder in ['models', 'plots', 'validation_data']:
-    os.makedirs(os.path.join('./save_out', folder), exist_ok=True)
-
-scalers = {"MinMaxScaler": MinMaxScaler,
-           "StandardScaler": StandardScaler}
 
 def main():
+    
+    start = time.time()
+    scalers = {"MinMaxScaler": MinMaxScaler,
+               "StandardScaler": StandardScaler}
+    
     # read YAML config as provided arg
     parser = argparse.ArgumentParser()
     parser.add_argument("-c", "--config", default="apin_O3.yml", help="Path to config file")
@@ -42,11 +38,16 @@ def main():
     max_exp = config['max_exp']
     input_vars = config['input_vars']
     output_vars = config['output_vars']
-    save_models = config['save_models']
     output_path = config['output_path']
     scaler_type = config['scaler_type']
     seq_length = config['seq_length']
     ensemble_members = config["ensemble_members"]
+    seed = config['random_seed']
+    # np.random.seed(seed)
+    # tf.random.set_seed(seed)
+
+    for folder in ['models', 'plots', 'validation_data', 'metrics', 'scalers']:
+        os.makedirs(join(output_path, folder), exist_ok=True)
 
     # Load GECKO experiment data, split into ML inputs and outputs and persistence outputs
     input_data, output_data = combine_data(dir_path, summary_file, aggregate_bins, bin_prefix,
@@ -111,23 +112,20 @@ def main():
 
 
     # write results
-    metrics_str = [f'{key} : {metrics[key]}' for key in metrics]
-    with open('{}metrics/{}_base_results.txt'.format(output_path, species), 'a') as f:
-        [f.write(f'{st}\n') for st in metrics_str]
-        f.write('\n')
+    #metrics_str = [f'{key} : {metrics[key]}' for key in metrics]
+    #with open('{}metrics/{}_base_results.txt'.format(output_path, species), 'a') as f:
+    #    [f.write(f'{st}\n') for st in metrics_str]
+    #    f.write('\n')
 
     # Save ML models, scaler objects, and validation
-    if save_models:
-        for model_name in models.keys():
-            #models[model_name].save_fortran_model(output_path + model_name + ".nc")
-            models[model_name].model.save('{}models/{}_{}'.format(
-                output_path, species, model_name))
+    for model_name in models.keys():
+        #models[model_name].save_fortran_model(join(output_path, 'models', model_name))
+        models[model_name].model.save(join(output_path, 'models', f'{species}_{model_name}'))
 
-        joblib.dump(x_scaler, '{}scalers/{}_x.scaler'.format(output_path, species))
-        joblib.dump(y_scaler, '{}scalers/{}_y.scaler'.format(output_path, species))
-
-        in_val.to_parquet('{}validation_data/{}_in_val.parquet'.format(output_path, species))
-        out_val.to_parquet('{}validation_data/{}_out_val.parquet'.format(output_path, species))
+    joblib.dump(x_scaler, join(output_path, 'scalers', f'{species}_x.scaler'))
+    joblib.dump(y_scaler, join(output_path, 'scalers', f'{species}_y.scaler'))
+    in_val.to_parquet(join(output_path, 'validation_data', f'{species}_in_val.parquet'))
+    out_val.to_parquet(join(output_path, 'validation_data', f'{species}_out_val.parquet'))
 
     print('Completed in {0:0.1f} seconds'.format(time.time() - start))
 

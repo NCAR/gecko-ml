@@ -9,7 +9,9 @@ import numpy as np
 import tensorflow as tf
 from geckoml.box import GeckoBoxEmulator, GeckoBoxEmulatorTS
 from geckoml.metrics import ensembled_box_metrics, plot_mae_ts, match_true_exps, plot_ensemble
+from geckoml.data import log_transform, inverse_log_transform
 from dask.distributed import Client, LocalCluster
+from os.path import join
 
 
 start = time.time()
@@ -35,13 +37,12 @@ def main():
     ensemble_members = config['ensemble_members']
 
     # Read validation data and scaler objects
-    val_in = pd.read_parquet('{}validation_data/{}_in_val.parquet'.format(output_path, species))
-    val_out = pd.read_parquet('{}validation_data/{}_out_val.parquet'.format(output_path, species))
+    val_in = pd.read_parquet(join(output_path, 'validation_data', f'{species}_in_val.parquet'))
+    val_out = pd.read_parquet(join(output_path, 'validation_data', f'{species}_out_val.parquet'))
+    val_out = inverse_log_transform(val_out, ['Precursor [ug/m3]'])
 
-    val_out['Precursor [ug/m3]'] = 10**(val_out['Precursor [ug/m3]'])
-
-    x_scaler = joblib.load('{}scalers/{}_x.scaler'.format(output_path, species))
-    y_scaler = joblib.load('{}scalers/{}_y.scaler'.format(output_path, species))
+    x_scaler = joblib.load(join(output_path, 'scalers', f'{species}_x.scaler'))
+    y_scaler = joblib.load(join(output_path, 'scalers', f'{species}_y.scaler'))
 
     scaled_val_arr = x_scaler.transform(val_in.iloc[:, 1:-1])
     scaled_val_in = val_in.copy()
@@ -56,7 +57,7 @@ def main():
             for model_name in config['model_configurations'][model_type].keys():
                 seq_length = 1
                 for member in range(ensemble_members):
-                    nnet_path = '{}models/{}_{}_{}/'.format(output_path, species, model_name, member)
+                    nnet_path = join(output_path, 'models', f'{species}_{model_name}_{member}')
                     mod = GeckoBoxEmulator(neural_net_path=nnet_path, output_scaler=y_scaler,
                                            input_cols=input_cols, output_cols=output_cols)
 
@@ -76,7 +77,7 @@ def main():
                 seq_length = config['seq_length']
                 predictions = {}
                 for member in range(ensemble_members):
-                    nnet_path = '{}models/{}_{}_{}/'.format(output_path, species, model_name, member)
+                    nnet_path = join(output_path, 'models', f'{species}_{model_name}_{member}')
                     mod = GeckoBoxEmulatorTS(neural_net_path=nnet_path, output_scaler=y_scaler, seq_length=seq_length,
                                                  input_cols=input_cols, output_cols=output_cols)
                     box_preds = mod.run_ensemble(client=client, data=scaled_val_in, num_timesteps=time_steps,
@@ -91,10 +92,10 @@ def main():
                 plot_ensemble(truth=y_true, preds=predictions, output_path=output_path,
                               species=species, model_name=model_name)
     # write metrics to file
-    metrics_str = [f'{key} : {metrics[key]}' for key in metrics]
-    with open('{}metrics/{}_box_results.txt'.format(output_path, species), 'a') as f:
-        [f.write(f'{st}\n') for st in metrics_str]
-        f.write('\n')
+    #metrics_str = [f'{key} : {metrics[key]}' for key in metrics]
+    #with open('{}metrics/{}_box_results.txt'.format(output_path, species), 'a') as f:
+    #    [f.write(f'{st}\n') for st in metrics_str]
+    #    f.write('\n')
     print('Completed in {0:0.1f} minutes.'.format((time.time() - start) / 60))
     return
 
