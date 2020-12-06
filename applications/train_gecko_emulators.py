@@ -1,9 +1,10 @@
 import sys
 sys.path.append('../')
 from geckoml.models import DenseNeuralNetwork, LongShortTermMemoryNetwork
-from geckoml.data import combine_data, split_data, reshape_data, partition_y_output, get_output_scaler
+from geckoml.data import combine_data, split_data, reshape_data, partition_y_output, get_output_scaler, \
+    reconstruct_preds, save_metrics
 from sklearn.preprocessing import StandardScaler, RobustScaler, MaxAbsScaler, MinMaxScaler, QuantileTransformer
-from geckoml.metrics import ensembled_base_metrics
+from geckoml.metrics import ensembled_metrics, match_true_exps
 import tensorflow as tf
 import time
 import joblib
@@ -77,7 +78,7 @@ def main():
                                                        seq_length, num_timesteps)
 
     # Train ML models and get validation metrics
-    models, metrics = {}, {}
+    single_ts_metrics, multi_ts_metrics = {}, {}
     for model_type in config["model_configurations"].keys():
 
         if model_type == 'single_ts_models':
@@ -85,42 +86,39 @@ def main():
             for model_name, model_config in config['model_configurations'][model_type].items():
 
                 y = partition_y_output(scaled_out_train, model_config['output_layers'], aggregate_bins)
-
+                single_ts_metrics[model_name] = {}
                 for member in range(ensemble_members):
 
-                    models[model_name + '_{}'.format(member)] = DenseNeuralNetwork(**model_config)
-                    models[model_name + '_{}'.format(member)].fit(scaled_in_train, y)
-                    preds = models[model_name + '_{}'.format(member)].predict(scaled_in_val)
-                    transformed_preds = pd.DataFrame(y_scaler.inverse_transform(preds))
-                    metrics[model_name + '_{}'.format(member)] = ensembled_base_metrics(
-                        out_val, transformed_preds, val_ids)
+                    mod = DenseNeuralNetwork(**model_config)
+                    mod.fit(scaled_in_train, y)
+                    preds = mod.predict(scaled_in_val)
+                    transformed_preds = reconstruct_preds(preds, out_val, y_scaler, ['Precursor [ug/m3]'])
+                    y_true, y_preds = match_true_exps(truth=out_val, preds=transformed_preds, num_timesteps=1439,
+                                                      seq_length=1, aggregate_bins=aggregate_bins, 
+                                                      bin_prefix=bin_prefix)
+                    single_ts_metrics[model_name][f'_{member}'] = ensembled_metrics(y_true, y_preds, member)
+                    mod.model.save(join(output_path, 'models', f'{species}_{model_name}_{member}'))
+                mod.save_fortran_model(join(output_path, 'models', model_name + '.nc'))
+                save_metrics(single_ts_metrics[model_name], output_path, model_name, ensemble_members, 'base')
 
         elif model_type == 'multi_ts_models':
 
             for model_name, model_config in config['model_configurations'][model_type].items():
 
                 y = partition_y_output(scaled_out_train_ts, model_config['output_layers'], aggregate_bins)
-
+                multi_ts_metrics[model_name] = {}
                 for member in range(ensemble_members):
 
-                    models[model_name + '_{}'.format(member)] = LongShortTermMemoryNetwork(**model_config)
-                    models[model_name + '_{}'.format(member)].fit(scaled_in_train_ts, y)
-                    preds = models[model_name + '_{}'.format(member)].predict(scaled_in_val_ts)
-                    transformed_preds = pd.DataFrame(y_scaler.inverse_transform(preds))
-                    metrics[model_name + '_{}'.format(member)] = ensembled_base_metrics(
-                        out_val, transformed_preds, val_id, seq_length)
-
-
-    # write results
-    #metrics_str = [f'{key} : {metrics[key]}' for key in metrics]
-    #with open('{}metrics/{}_base_results.txt'.format(output_path, species), 'a') as f:
-    #    [f.write(f'{st}\n') for st in metrics_str]
-    #    f.write('\n')
-
-    # Save ML models, scaler objects, and validation
-    for model_name in models.keys():
-        #models[model_name].save_fortran_model(join(output_path, 'models', model_name))
-        models[model_name].model.save(join(output_path, 'models', f'{species}_{model_name}'))
+                    mod = LongShortTermMemoryNetwork(**model_config)
+                    mod.fit(scaled_in_train_ts, y)
+                    preds = mod.predict(scaled_in_val_ts)
+                    transformed_preds = reconstruct_preds(preds, out_val, y_scaler, ['Precursor [ug/m3]'], seq_length)
+                    y_true, y_preds = match_true_exps(truth=out_val, preds=transformed_preds, num_timesteps=1439,
+                                                      seq_length=seq_length, aggregate_bins=aggregate_bins, 
+                                                      bin_prefix=bin_prefix)
+                    multi_ts_metrics[model_name][f'_{member}'] = ensembled_metrics(y_true, y_preds, member)
+                    mod.model.save(join(output_path, 'models', f'{species}_{model_name}_{member}'))
+                save_metrics(multi_ts_metrics[model_name], output_path, model_name, ensemble_members, 'base')
 
     joblib.dump(x_scaler, join(output_path, 'scalers', f'{species}_x.scaler'))
     joblib.dump(y_scaler, join(output_path, 'scalers', f'{species}_y.scaler'))

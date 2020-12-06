@@ -79,6 +79,27 @@ def inverse_log_transform(dataframe, cols_to_transform):
     return dataframe
 
 
+def reconstruct_preds(predictions, truth, y_scaler, log_trans_cols, seq_len=1):
+    """
+    Reconstruct model predictions into matching dataframe against truth
+    Args:
+         predictions: np.array of model predictions
+         truth: pandas dataframe of truth values (including time and experiment number)
+         y_scaler: outjput scaler object
+         log_trans_cols: list of columns to transform from base 10 log transformations
+         seq_len: lookback length for lstm models (otherwise defaults to 1)
+    Returns:
+         transformed pandas dataframe of predictions including time and experiment numbers
+    """
+    preds = pd.DataFrame(y_scaler.inverse_transform(predictions), columns=truth.columns[1:-1])
+    truth = truth.groupby('id').apply(lambda x: x.iloc[seq_len - 1:, :]).reset_index(drop=True)
+    preds['Time [s]'] = truth['Time [s]'].values
+    preds['id'] = truth['id'].values
+    preds = inverse_log_transform(preds, log_trans_cols)
+    preds = preds.sort_values(['id', 'Time [s]']).reset_index(drop=True)
+    
+    return preds
+
 def get_tendencies(df, output_cols):
     """
      Transform dataframe to time tendencies rather than actual values. Preserves static environmental values.
@@ -312,3 +333,23 @@ def reshape_data(x_data, y_data, seq_length, num_timesteps):
             y_new[(i * num_seq_ts) + j] = y_data[(num_timesteps * i) + j + seq_length - 1]
 
     return x_new, y_new
+
+
+def save_metrics(metrics, output_path, model_name, members, model_type):
+    """
+    Save ensemble member metrics and aggregated metrics to CSV file 
+    Args:
+        metrics: dictionary of pandas dataframes of metrics for each ensemble member
+        output_path: Base output path 
+        model_name: name of model used to create metrics
+        members: number of ensemble members
+        model_type: (str) 'base' or 'box'. Used for file naming. 
+    """
+    member_metrics = pd.concat([x for x in metrics.values()]).reset_index(drop=True)
+    ensemble_metrics = member_metrics.groupby(['mass_phase']).mean()
+    ensemble_metrics['n_members'] = members
+    member_metrics.to_csv(join(output_path, 'metrics', f'{model_name}_{model_type}_metrics.csv'), index=False)
+    ensemble_metrics.to_csv(join(output_path, 'metrics', f'{model_name}_mean_{model_type}_metrics.csv'))
+
+    return
+

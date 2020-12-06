@@ -113,73 +113,40 @@ def plot_mae_ts(y_true, y_pred, output_path, model_name, species):
     fig = ax.get_figure()
     fig.savefig(join(output_path, 'plots', f'{species}_{model_name}_mae_ts.png'))
 
-def ensembled_box_metrics(y_true, y_pred):
+def ensembled_metrics(y_true, y_pred, member):
     """ Call a variety of metrics to be calculated (Hellenger distance R2, and RMSE currently) on Box emulator results.
         If bins were not aggregated, all bins are summed before metrics are calculated.
     Args:
         y_true (np.array): True output data
         y_pred (np.array): Predicted output data
     Returns:
-        metrics (dictionary): results for 'Precursor', 'Gas', and 'Aerosol' for each type of metric.
+        metrics (pd.dataframe): results for 'Precursor', 'Gas', and 'Aerosol' for a variety of metrics 
     """
-    if len(y_true.columns) > 5:
-        preds = np.empty((y_pred.shape[0], 3))
-        preds[:, 0] = y_pred.iloc[:, 0]
-        preds[:, 1] = np.sum(y_pred.iloc[:, 0:14], axis=1)
-        preds[:, 2] = np.sum(y_pred.iloc[:, 14:-2], axis=1)
 
-        truth = np.empty((y_true.shape[0], 3))
-        truth[:, 0] = y_true.iloc[:, 1]
-        truth[:, 1] = np.sum(y_true.iloc[:, 2:16], axis=1)
-        truth[:, 2] = np.sum(y_true.iloc[:, 16:-1], axis=1)
+    df = pd.DataFrame(columns=['ensemble_member', 'mass_phase', 'mean_mse', 'mean_mae', 'mean_r2', 'mean_hd', 'sd_mse',
+                               'sd_mae', 'sd_r2', 'sd_hd', 'n_val_exps'])
 
-    else:
-        preds = y_pred.sort_values(['id', 'Time [s]'], ascending=True).iloc[:, :-2].values
-        truth = y_true.sort_values(['id', 'Time [s]'], ascending=True).iloc[:, 1:-1].values
+    for col in y_true.columns[1:-1]:
+        
+        l = []
+        l.append(member)
+        l.append(col)
+        l.append(mean_squared_error(y_true[col], y_pred[col]))
+        l.append(mean_absolute_error(y_true[col], y_pred[col]))
+        l.append(r2_corr(y_true[col], y_pred[col]))
+        l.append(hellinger_distance(y_true[col], y_pred[col]))
 
-    metrics = {}
-    rmse_l, mae_l, r2_l, hd_l = [], [], [], []
+        temp_df = pd.DataFrame(data={'t': y_true[col].values, 'p': y_pred[col].values, 'id': y_true['id']})
+        l.append(temp_df.groupby('id').apply(lambda x: mean_squared_error(x['t'], x['p'])).std())
+        l.append(temp_df.groupby('id').apply(lambda x: mean_absolute_error(x['t'], x['p'])).std())
+        l.append(temp_df.groupby('id').apply(lambda x: r2_corr(x['t'], x['p'])).std())
+        l.append(temp_df.groupby('id').apply(lambda x: hellinger_distance(x['t'], x['p'])).std())
+        l.append(temp_df['id'].nunique())
 
-    for i in np.arange(3):
-        rmse_l.append(root_mean_squared_error(truth[:, i], preds[:, i]))
-    metrics['RMSE'] = rmse_l
-    for i in np.arange(3):
-        mae_l.append(mean_abs_error(truth[:, i], preds[:, i]))
-    metrics['MAE'] = mae_l
-    for i in np.arange(3):
-        r2_l.append(r2_corr(truth[:, i], preds[:, i]))
-    metrics['R2'] = r2_l
-    for i in np.arange(3):
-        hd_l.append(hellinger_distance(truth[:, i], preds[:, i]))
-    metrics['HD'] = hd_l
+        df = df.append(pd.DataFrame([l], columns=df.columns))
 
-    return metrics
+    return df
 
-
-def ensembled_base_metrics(y_true, y_pred, ids, seq_length=1):
-    """ Call a variety of metrics to be calculated (Hellenger distance and RMSE, currently) on Base Model results using
-        all output variables.
-    Args:
-        y_true (np.array): True output data
-        y_pred (np.array): Predicted output data
-    """
-    if seq_length > 1:
-        y_true = y_true.groupby('id').apply(lambda x: x.iloc[(seq_length - 1):, :])
-    y_pred.columns = y_true.columns[1:-1]
-    y_pred['id'] = ids
-    y_pred['Time [s]'] = y_true['Time [s]'].values
-    y_pred = y_pred.reindex(y_true.columns, axis=1)
-    y_pred = inverse_log_transform(y_pred, ['Precursor [ug/m3]'])
-    y_true = y_true.iloc[:, 1:-1].values
-    y_pred = y_pred.iloc[:, 1:-1].values
-
-    metrics = {}
-
-    metrics['RMSE'] = root_mean_squared_error(y_true, y_pred)
-    #metrics['R2'] = root_mean_squared_error(y_true, y_pred)
-    metrics['HD'] = hellinger_distance(y_true, y_pred)
-
-    return metrics
 
 def match_true_exps(truth, preds, num_timesteps, seq_length, aggregate_bins, bin_prefix):
     """ Retrieve true values that match the experiments used in previous box emulator run
