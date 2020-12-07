@@ -35,8 +35,6 @@ def main():
     summary_file = config['summary_file']
     aggregate_bins = config['aggregate_bins']
     bin_prefix = config['bin_prefix']
-    min_exp = config['min_exp']
-    max_exp = config['max_exp']
     input_vars = config['input_vars']
     output_vars = config['output_vars']
     output_path = config['output_path']
@@ -44,7 +42,6 @@ def main():
     seq_length = config['seq_length']
     ensemble_members = config["ensemble_members"]
     seed = config['random_seed']
-    # np.random.seed(seed)
     # tf.random.set_seed(seed)
 
     for folder in ['models', 'plots', 'validation_data', 'metrics', 'scalers']:
@@ -52,11 +49,18 @@ def main():
 
     # Load GECKO experiment data, split into ML inputs and outputs and persistence outputs
     input_data, output_data = combine_data(dir_path, summary_file, aggregate_bins, bin_prefix,
-                                           input_vars, output_vars, min_exp, max_exp, species)
+                                           input_vars, output_vars, species)
 
     # Split into training, validation, testing subsets
     in_train, out_train, in_val, out_val, in_test, out_test = split_data(
-        input_data=input_data, output_data=output_data, random_state=seed)
+                                                                    input_data=input_data, 
+                                                                    output_data=output_data, 
+                                                                    train_start=config['train_start_exp'],
+                                                                    train_end=config['train_end_exp'],
+                                                                    val_start=config['val_start_exp'],
+                                                                    val_end=config['val_end_exp'],
+                                                                    test_start=config['test_start_exp'],
+                                                                    test_end=config['test_end_exp'])
 
     num_timesteps = in_train['Time [s]'].nunique()
 
@@ -68,9 +72,6 @@ def main():
     y_scaler = get_output_scaler(x_scaler, output_vars, scaler_type, data_range=(-1, 1))
     scaled_out_train = y_scaler.transform(out_train.drop(['Time [s]', 'id'], axis=1))
     scaled_out_val = y_scaler.transform(out_val.drop(['Time [s]', 'id'], axis=1))
-
-    val_ids = in_val['id'].values
-    val_id = in_val.groupby('id').apply(lambda x: x.iloc[(seq_length - 1):, :])['id'].values
 
     scaled_in_train_ts, scaled_out_train_ts = reshape_data(scaled_in_train.copy(), scaled_out_train.copy(),
                                                            seq_length, num_timesteps)

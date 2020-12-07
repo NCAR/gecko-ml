@@ -14,10 +14,8 @@ from dask.distributed import Client, LocalCluster
 from os.path import join
 
 
-start = time.time()
-
-
 def main():
+    start = time.time()
     # read YAML config as provided arg
     parser = argparse.ArgumentParser()
     parser.add_argument("-c", "--config", default="dodecane_agg.yml", help="Path to config file")
@@ -31,7 +29,7 @@ def main():
     # Extract config arguments and validate if necessary
     species = config['species']
     output_path = config['output_path']
-    num_exps = config['num_exps']
+    exps = config['box_val_exps']
     input_cols = config['input_vars']
     output_cols = config['output_vars']
     ensemble_members = config['ensemble_members']
@@ -64,7 +62,7 @@ def main():
                                            input_cols=input_cols, output_cols=output_cols)
 
                     box_preds = mod.run_ensemble(client=client, data=scaled_val_in, num_timesteps=time_steps,
-                                                 num_exps=num_exps)
+                                                 exps=exps)
                     y_true, y_preds = match_true_exps(truth=val_out, preds=box_preds, num_timesteps=time_steps,
                                                       seq_length=seq_length, aggregate_bins=config['aggregate_bins'],
                                                       bin_prefix=config['bin_prefix'])
@@ -85,7 +83,7 @@ def main():
                     mod = GeckoBoxEmulatorTS(neural_net_path=nnet_path, output_scaler=y_scaler, seq_length=seq_length,
                                                  input_cols=input_cols, output_cols=output_cols)
                     box_preds = mod.run_ensemble(client=client, data=scaled_val_in, num_timesteps=time_steps,
-                                                 num_exps=num_exps)
+                                                 exps=exps)
                     y_true, y_preds = match_true_exps(truth=val_out, preds=box_preds, num_timesteps=time_steps,
                                                  seq_length=seq_length, aggregate_bins=config['aggregate_bins'],
                                                  bin_prefix=config['bin_prefix'])

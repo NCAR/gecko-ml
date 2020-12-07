@@ -240,9 +240,6 @@ class LongShortTermMemoryNetwork(object):
             outputs (int): Number of output predictor variables
             seq_input (int): Number of timesteps (length of sequence)
         """
-        seed = 8886
-        #np.random.seed(seed)
-        #tf.random.set_seed(seed)
 
         nn_input = Input(shape=(seq_input, inputs), name="input")
         nn_model = nn_input

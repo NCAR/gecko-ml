@@ -33,23 +33,24 @@ class GeckoBoxEmulator(object):
 
         return
 
-    def run_ensemble(self, client, data, num_timesteps, num_exps='all'):
+    def run_ensemble(self, client, data, num_timesteps, exps='all'):
         """
         Run an ensemble of GECKO-A experiment emulations distributed over a cluster using dask distributed.
         Args:
             client: Dask distributed TCP client
             data (numpy array): Scaled input Validation/testing dataframe, split by experiment.
             num_timesteps (int): Number of timesteps to run each emulation forward.
-            num_exps (int or 'all'): Number of experiments to run. Defaults to 'all' within data provided. If (int),
+            exps (list of integers or 'all'): Number of experiments to run. Defaults to 'all' within data provided. If (int),
                     choose experiments randomly from those available.
         Returns:
             results_df (DataFrame): A concatenated pandas DataFrame of emulation results.
         """
         np.random.seed(self.seed)
-        exps = data['id'].unique()
 
-        if num_exps != 'all':
-            exps = np.random.choice(exps, num_exps, replace=False)
+        if exps == 'all':
+            exps = data['id'].unique()
+        else:
+            exps = ['Exp' + str(i) for i in exps]
 
         starting_conds, temps, initial_out_values = [], [], []
         time_series = data[data['id'] == exps[0]]['Time [s]']
@@ -183,7 +184,7 @@ class GeckoBoxEmulatorTS(object):
 
         return
 
-    def run_ensemble(self, client, data, num_timesteps, num_exps='all'):
+    def run_ensemble(self, client, data, num_timesteps, exps='all'):
         """
         Run an ensemble of GECKO-A experiment emulations distributed over a cluster using dask distributed.
         Args:
@@ -197,9 +198,11 @@ class GeckoBoxEmulatorTS(object):
         """
         np.random.seed(self.seed)
         num_seq_ts = num_timesteps - self.seq_length + 1
-        exps = data['id'].unique()
-        if num_exps != 'all':
-            exps = np.random.choice(exps, num_exps, replace=False)
+
+        if exps == 'all':
+            exps = data['id'].unique()
+        else:
+            exps = ['Exp' + str(i) for i in exps]
 
         starting_conds, temps, initial_out_values = [], [], []
         time_series = data[data['id'] == exps[0]].iloc[-num_seq_ts:, :]['Time [s]'].copy()
