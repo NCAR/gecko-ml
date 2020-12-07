@@ -65,11 +65,12 @@ def main():
     num_timesteps = in_train['Time [s]'].nunique()
 
     # Rescale training and validation / testing data
-    x_scaler = scalers[scaler_type]((-1, 1))
+    x_scaler = scalers[scaler_type]((config['min_scale_range'], config['max_scale_range']))
     scaled_in_train = x_scaler.fit_transform(in_train.drop(['Time [s]', 'id'], axis=1))
     scaled_in_val = x_scaler.transform(in_val.drop(['Time [s]', 'id'], axis=1))
 
-    y_scaler = get_output_scaler(x_scaler, output_vars, scaler_type, data_range=(-1, 1))
+    y_scaler = get_output_scaler(x_scaler, output_vars, scaler_type, data_range=(
+                                config['min_scale_range'], config['max_scale_range']))
     scaled_out_train = y_scaler.transform(out_train.drop(['Time [s]', 'id'], axis=1))
     scaled_out_val = y_scaler.transform(out_val.drop(['Time [s]', 'id'], axis=1))
 
@@ -94,9 +95,9 @@ def main():
                     mod.fit(scaled_in_train, y)
                     preds = mod.predict(scaled_in_val)
                     transformed_preds = reconstruct_preds(preds, out_val, y_scaler, ['Precursor [ug/m3]'])
-                    y_true, y_preds = match_true_exps(truth=out_val, preds=transformed_preds, num_timesteps=1439,
-                                                      seq_length=1, aggregate_bins=aggregate_bins, 
-                                                      bin_prefix=bin_prefix)
+                    y_true, y_preds = match_true_exps(truth=out_val, preds=transformed_preds, 
+                                                      num_timesteps=num_timesteps, seq_length=1, 
+                                                      aggregate_bins=aggregate_bins, bin_prefix=bin_prefix)
                     single_ts_metrics[model_name][f'_{member}'] = ensembled_metrics(y_true, y_preds, member)
                     mod.model.save(join(output_path, 'models', f'{species}_{model_name}_{member}'))
                 mod.save_fortran_model(join(output_path, 'models', model_name + '.nc'))
@@ -114,9 +115,9 @@ def main():
                     mod.fit(scaled_in_train_ts, y)
                     preds = mod.predict(scaled_in_val_ts)
                     transformed_preds = reconstruct_preds(preds, out_val, y_scaler, ['Precursor [ug/m3]'], seq_length)
-                    y_true, y_preds = match_true_exps(truth=out_val, preds=transformed_preds, num_timesteps=1439,
-                                                      seq_length=seq_length, aggregate_bins=aggregate_bins, 
-                                                      bin_prefix=bin_prefix)
+                    y_true, y_preds = match_true_exps(truth=out_val, preds=transformed_preds, 
+                                                      num_timesteps=num_timesteps, seq_length=seq_length, 
+                                                      aggregate_bins=aggregate_bins, bin_prefix=bin_prefix)
                     multi_ts_metrics[model_name][f'_{member}'] = ensembled_metrics(y_true, y_preds, member)
                     mod.model.save(join(output_path, 'models', f'{species}_{model_name}_{member}'))
                 save_metrics(multi_ts_metrics[model_name], output_path, model_name, ensemble_members, 'base')
