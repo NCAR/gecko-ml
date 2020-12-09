@@ -10,38 +10,8 @@ import dask.dataframe as dd
 from dask import delayed
 
 scalers = {"MinMaxScaler": MinMaxScaler,
-           "MaxAbsScaler": MaxAbsScaler,
-           "StandardScaler": StandardScaler,
-           "RobustScaler": RobustScaler}
+           "StandardScaler": StandardScaler}
 
-def load_data(path, summary_file, species="toluene_kOH", delimiter=", ", experiment="ML2019"):
-    """
-    Load a set of experiment files based on a summary file.
-    
-    Args:
-        path: Path to the directory containing summary and experiment files
-        summary_file: Name of the summary file (should not contain the path)
-        species: Name of the precursor chemical species
-        delimiter
-    
-    Returns:
-        exp_data_merged: All time series data for every experiment in pandas DataFrame
-        summary_data: Summary experiment data file in pandas DataFrame
-    """
-    summary_data = pd.read_csv(join(path, summary_file), skiprows=3)
-    summary_data.columns = summary_data.columns.str.strip()
-    summary_data["idnum"] = summary_data.index
-    exp_data_list = []
-    for i, id_val in enumerate(tqdm(summary_data["id"])):
-        exp_file = join(path, f"{experiment}_{species}_{experiment}_{id_val}.csv")
-        exp_data_list.append(pd.read_csv(exp_file, delimiter=delimiter))
-        exp_data_list[-1]["id"] = id_val
-        exp_data_list[-1]["idnum"] = int(id_val[3:])
-        exp_data_list[-1]["timestep"] = np.arange(exp_data_list[-1].shape[0])
-    exp_data_combined = pd.concat(exp_data_list, ignore_index=True)
-    exp_data_combined.columns = exp_data_combined.columns.str.strip()
-    exp_data_merged = pd.merge(exp_data_combined, summary_data, left_on="idnum", right_on="idnum")
-    return exp_data_merged, summary_data
 
 def add_diurnal_signal(x_data):
     """
@@ -57,12 +27,55 @@ def add_diurnal_signal(x_data):
     return x_data
 
 
+def log_transform(dataframe, cols_to_transform):
+    """
+    Perform log 10 transformation of specified columns
+    Args:
+        dataframe: full dataframe
+        cols_to_transform: list of columns to perform transformation on 
+    """
+    dataframe[cols_to_transform] = np.log10(dataframe[cols_to_transform])
+    return dataframe
+
+
+def inverse_log_transform(dataframe, cols_to_transform):
+    """
+    Perform inverse log 10 transformation of specified columns
+    Args:
+        dataframe: full dataframe
+        cols_to_transform: list of columns to perform transformation on 
+    """
+    dataframe[cols_to_transform] = 10 ** dataframe[cols_to_transform]
+    return dataframe
+
+
+def reconstruct_preds(predictions, truth, y_scaler, log_trans_cols, seq_len=1):
+    """
+    Reconstruct model predictions into matching dataframe against truth
+    Args:
+         predictions: np.array of model predictions
+         truth: pandas dataframe of truth values (including time and experiment number)
+         y_scaler: outjput scaler object
+         log_trans_cols: list of columns to transform from base 10 log transformations
+         seq_len: lookback length for lstm models (otherwise defaults to 1)
+    Returns:
+         transformed pandas dataframe of predictions including time and experiment numbers
+    """
+    preds = pd.DataFrame(y_scaler.inverse_transform(predictions), columns=truth.columns[1:-1])
+    truth = truth.groupby('id').apply(lambda x: x.iloc[seq_len - 1:, :]).reset_index(drop=True)
+    preds['Time [s]'] = truth['Time [s]'].values
+    preds['id'] = truth['id'].values
+    preds = inverse_log_transform(preds, log_trans_cols)
+    preds = preds.sort_values(['id', 'Time [s]']).reset_index(drop=True)
+
+    return preds
+
 def get_tendencies(df, output_cols):
     """
      Transform dataframe to time tendencies rather than actual values. Preserves static environmental values.
     Args:
         df: Pre-scaled input dataframe.
-        input_cols: Input columns to be transformed (should include 'id' and 'Time' for indexing).
+        output_cols: Output columns to be transformed (should include 'id' and 'Time' for indexing).
 
     Returns: Pandas dataframe with input columns transformed to tendencies (Removes the first sample of each Exp).
     """
@@ -74,6 +87,7 @@ def get_tendencies(df, output_cols):
 
     return dff
 
+
 def convert_to_values(original, preds, output_cols, seq_length=1):
     """
     Convert tendencies back to actual values.
@@ -81,6 +95,7 @@ def convert_to_values(original, preds, output_cols, seq_length=1):
         original: Original df that was used to create tendencies
         preds: Model predictions.
         output_cols: Output columns from config.
+        seq_length: Length of sequence (for multi-time step models)
     Returns: Converted Dataframe.
     """
     original = original[output_cols].groupby('id').apply(lambda x: x.iloc[seq_length - 1:-1, :]).reset_index(drop=True)
@@ -91,6 +106,7 @@ def convert_to_values(original, preds, output_cols, seq_length=1):
 
     return converted
 
+
 def get_data_serial(file_path, summary_data, bin_prefix, input_vars, output_vars, aggregate_bins):
     """
         Load an experiment file based on a summary file; combine data from summary into experiment file
@@ -100,7 +116,7 @@ def get_data_serial(file_path, summary_data, bin_prefix, input_vars, output_vars
         summary_data: Summary dataframe
         bin_prefix: Prefix of compound volitility bins if aggregation is used
         input_vars: List of varibles to subset for input
-        ouput_vars: List of varibles to subset for ouput
+        output_vars: List of varibles to subset for ouput
         aggregate_bins: Boolean to aggregate bins
     
     Returns:
@@ -125,20 +141,25 @@ def get_data_serial(file_path, summary_data, bin_prefix, input_vars, output_vars
 
             df[prefix] = df.loc[:, df.columns.str.contains(prefix, regex=False)].sum(axis=1)
             
-    input_subset, output_subset = df[input_vars].iloc[:-1,:], df[output_vars].iloc[1:,:]
+    input_subset, output_subset = df[input_vars].iloc[:-1, :], df[output_vars].iloc[1:, :]
     
     return input_subset, output_subset
 
 
 def combine_data(dir_path, summary_file, aggregate_bins, bin_prefix,
-                 input_vars, output_vars, min_exp, max_exp, species):
+                 input_vars, output_vars, species):
     """
         Distribute get_serial_data() using dask to parallelize tasks and concatenate dataframes
-    
     Args:
-        summary_path: Full path of summary file
+        dir_path: Directory path for experiment files
+        summary_file: Name of summary file
+        aggregate_bins (boolean): Whether to sum data of similar type
+        bin_prefix: List of prefixes fr aggregating (if aggregate_bins is True)
+        input_vars: List of input features
+        output_vars: List of output features
         min_exp: Minimum experiment number to process
         max_exp: Maximum experiment number to process
+        species: Chemical species from config
     
     Returns:
         input_subset: Complete pandas input dataframe 
@@ -153,68 +174,103 @@ def combine_data(dir_path, summary_file, aggregate_bins, bin_prefix,
     
     dfs_in = [delayed(get_data_serial)
               (f, summary, bin_prefix=bin_prefix, input_vars=input_vars, output_vars=output_vars,
-               aggregate_bins=aggregate_bins)[0] for f in sorted_filelist[min_exp:max_exp + 1]] 
+               aggregate_bins=aggregate_bins)[0] for f in sorted_filelist] 
     dfs_out = [delayed(get_data_serial)
                (f, summary, bin_prefix=bin_prefix, input_vars=input_vars, output_vars=output_vars,
-                aggregate_bins=aggregate_bins)[1] for f in sorted_filelist[min_exp:max_exp + 1]] 
+                aggregate_bins=aggregate_bins)[1] for f in sorted_filelist] 
 
     ddf_in, ddf_out = dd.from_delayed(dfs_in), dd.from_delayed(dfs_out)  # assemble dask dfs
     
-    df_in = ddf_in.compute(scheduler='processes').reset_index() # transform back to pandas df
-    df_out = ddf_out.compute(scheduler='processes').reset_index()
-    df_in['Precursor [ug/m3]'] = np.log10(df_in['Precursor [ug/m3]'])
-    df_out['Precursor [ug/m3]'] = np.log10(df_out['Precursor [ug/m3]'])
-    del df_in['index'], df_out['index']
+    df_in = ddf_in.compute(scheduler='processes').reset_index(drop=True) # transform back to pandas df
+    df_out = ddf_out.compute(scheduler='processes').reset_index(drop=True)
+    df_in = log_transform(df_in, ['Precursor [ug/m3]'])
+    df_in = add_diurnal_signal(df_in)
+    df_out = log_transform(df_out, ['Precursor [ug/m3]'])
 
     return df_in, df_out
 
 
-def partition_y_output(y, output_layers):
+def get_output_scaler(scaler_obj, output_vars, scaler_type='MinMaxScaler', data_range=(-1, 1)):
+    """ Repopulate output scaler object with attributes from input scaler object.
+    Args:
+        scaler_obj: Input (x) scaler object
+        output_vars: list of output variables from config
+        scaler_type: Sklearn scaler type from config
+        data_range: data bounds for scaling from config
+
+    Returns: output scaler
+    """
+    num_features = len(output_vars[1:-1])
+    if scaler_type == 'MinMaxScaler':
+        scaler = MinMaxScaler(data_range)
+        setattr(scaler, 'scale_', scaler_obj.scale_[0:num_features])
+        setattr(scaler, 'min_', scaler_obj.min_[0:num_features])
+
+    elif scaler_type == 'StandardScaler':
+        scaler = StandardScaler(data_range)
+        setattr(scaler, 'scale_', scaler_obj.scale_[0:num_features])
+        setattr(scaler, 'mean_', scaler_obj.mean_[0:num_features])
+
+    return scaler
+
+
+def partition_y_output(y, output_layers, aggregate_bins=True):
     """
     Split y data into list based on number of output layers
-    :param y: scaled y data (np.array)
-    :param output_layers: number of output layer from config file
-    :return: list of y data to be fed to fit function
+    Args:
+        y: scaled y data (np.array)
+        output_layers: number of output layer from config file
+        aggregate_bins (boolean): Whether data was aggregated (determines number of features)
+
+    Returns: list of y data to be fed to fit function
     """
     if (output_layers > 3) | (output_layers < 1):
         raise ValueError('Invalid number of layers. Must be either 1, 2 or 3.')
     elif output_layers == 3:
-        data = [y[:, 0].reshape(-1, 1), y[:, 1].reshape(-1, 1), y[:, 2].reshape(-1, 1)]
+        if not aggregate_bins:
+            data = [y[:, 0].reshape(-1, 1), y[:, 1:15].reshape(-1, 14), y[:, 15:].reshape(-1, 14)]
+        else:
+            data = [y[:, 0].reshape(-1, 1), y[:, 1].reshape(-1, 1), y[:, 2].reshape(-1, 1)]
     elif output_layers == 2:
-        data = [y[:, 0].reshape(-1, 1), y[:, 1:].reshape(-1, 2)]
+        if not aggregate_bins:
+            data = [y[:, 0].reshape(-1, 1), y[:, 1:].reshape(-1, 28)]
+        else:
+            data = [y[:, 0].reshape(-1, 1), y[:, 1:].reshape(-1, 2)]
     elif output_layers == 1:
-        data = [y.reshape(-1, 1)]
+        data = [y]
     return data
 
-def split_data(input_data, output_data, n_splits=2, random_state=8):
+
+def split_data(input_data, output_data, train_start, train_end, val_start, val_end, test_start, test_end):
     """
     Split data, by experiment, into training/validation/testing sets for both input/output dataframes.
-
     Args:
         input_data: Complete input dataframe to process
         output_data: Complete output dataframe to process
-        n_splits: Number of re-shuffling & splitting iterations
-    
+        train_start (int): Experiment number to start from for training set
+        train_end (int): Experiment number to end on for training set
+        val_start (int): Experiment number to start from for validation set
+        val_end (int): Experiment number to end on for validation set
+        test_start (int): Experiment number to start from for test set
+        test_end (int): Experiment number to end on for test set
     Returns:
         in_train: training data input as pandas df (80% total input)
-        in_val: validation data input as pandas df (10% total input)
-        in_test: testing data input as pandas df (10% total input)
         out_train: training data output as pandas df (80% total output)
+        in_val: validation data input as pandas df (10% total input)
         out_val: validation data output as pandas df (10% total output)
+        in_test: testing data input as pandas df (10% total input)
         out_test: testing data output as pandas df (10% total output)
     """
-    train_indx, remain_indx = next(GroupShuffleSplit(test_size=.2, n_splits=n_splits,
-                                    random_state=random_state).split(input_data, groups=input_data['id']))
-    
-    in_train, out_train = input_data.iloc[train_indx], output_data.iloc[train_indx]
-    remain_in, remain_out = input_data.iloc[remain_indx], output_data.iloc[remain_indx]
-    
-    val_indx, test_indx = next(GroupShuffleSplit(test_size=.5, n_splits=n_splits,
-                                    random_state=random_state).split(remain_in, groups=remain_in['id']))
-     
-    in_val, out_val = remain_in.iloc[val_indx], remain_out.iloc[val_indx]
-    in_test, out_test = remain_in.iloc[test_indx], remain_out.iloc[test_indx]
-    in_train, in_val, in_test = map(add_diurnal_signal, [in_train, in_val, in_test])
+    train_exps = np.arange(train_start, train_end + 1)
+    val_exps = np.arange(val_start, val_end + 1)
+    test_exps = np.arange(test_start, test_end + 1)
+
+    in_train = input_data[input_data['id'].isin(["".join(('Exp', str(i))) for i in train_exps])]
+    out_train = output_data[output_data['id'].isin(["".join(('Exp', str(i))) for i in train_exps])]
+    in_val = input_data[input_data['id'].isin(["".join(('Exp', str(i))) for i in val_exps])]
+    out_val = output_data[output_data['id'].isin(["".join(('Exp', str(i))) for i in val_exps])]
+    in_test = input_data[input_data['id'].isin(["".join(('Exp', str(i))) for i in test_exps])]
+    out_test = output_data[output_data['id'].isin(["".join(('Exp', str(i))) for i in test_exps])]
 
     return in_train, out_train, in_val, out_val, in_test, out_test
 
@@ -247,3 +303,23 @@ def reshape_data(x_data, y_data, seq_length, num_timesteps):
             y_new[(i * num_seq_ts) + j] = y_data[(num_timesteps * i) + j + seq_length - 1]
 
     return x_new, y_new
+
+
+def save_metrics(metrics, output_path, model_name, members, model_type):
+    """
+    Save ensemble member metrics and aggregated metrics to CSV file 
+    Args:
+        metrics: dictionary of pandas dataframes of metrics for each ensemble member
+        output_path: Base output path 
+        model_name: name of model used to create metrics
+        members: number of ensemble members
+        model_type: (str) 'base' or 'box'. Used for file naming. 
+    """
+    member_metrics = pd.concat([x for x in metrics.values()]).reset_index(drop=True)
+    ensemble_metrics = member_metrics.groupby(['mass_phase']).mean()
+    ensemble_metrics['n_members'] = members
+    member_metrics.to_csv(join(output_path, 'metrics', f'{model_name}_{model_type}_metrics.csv'), index=False)
+    ensemble_metrics.to_csv(join(output_path, 'metrics', f'{model_name}_mean_{model_type}_metrics.csv'))
+
+    return
+
