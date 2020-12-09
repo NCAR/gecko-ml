@@ -44,16 +44,16 @@ model_configurations:
       output_layers: 3
       output_activation: "linear"
       optimizer: "adam"
-      loss: ["mae", "mse", "mse"]
-      loss_weights: [1, 20, 50]
-      lr: 0.00005
+      loss: ["mae", "mae", "mae"]
+      loss_weights: [1, 1, 1]
+      lr: 0.000005
       batch_size: 2048
       use_noise: False
       noise_sd: 0.01
-      epochs: 30
+      epochs: 1000
       use_dropout: False
       dropout_alpha: 0.1
-      l2_weight: 0.01
+      l2_weight: 0.001
       sgd_momentum: 0.9
       adam_beta_1: 0.9
       adam_beta_2: 0.999
