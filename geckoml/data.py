@@ -67,7 +67,7 @@ def reconstruct_preds(predictions, truth, y_scaler, log_trans_cols, seq_len=1):
     preds['id'] = truth['id'].values
     preds = inverse_log_transform(preds, log_trans_cols)
     preds = preds.sort_values(['id', 'Time [s]']).reset_index(drop=True)
-    
+
     return preds
 
 def get_tendencies(df, output_cols):
@@ -186,7 +186,6 @@ def combine_data(dir_path, summary_file, aggregate_bins, bin_prefix,
     df_in = log_transform(df_in, ['Precursor [ug/m3]'])
     df_in = add_diurnal_signal(df_in)
     df_out = log_transform(df_out, ['Precursor [ug/m3]'])
-    df_in.to_csv('/glade/work/cbecker/all_in.csv')
 
     return df_in, df_out
 

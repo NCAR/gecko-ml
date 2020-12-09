@@ -158,19 +158,19 @@ def match_true_exps(truth, preds, num_timesteps, seq_length, aggregate_bins, bin
         aggregate_bins (boolean): Whether or not to aggregate data (determines number of features)
         bin_prefix (list): List of strings to aggregate on if aggregate_bins is True
     """
+    true_df = truth.copy()
     if not aggregate_bins:
         for prefix in bin_prefix:
-            truth[prefix] = truth.loc[:, truth.columns.str.contains(prefix, regex=False)].sum(axis=1)
+            true_df[prefix] = true_df.loc[:, true_df.columns.str.contains(prefix, regex=False)].sum(axis=1)
             preds[prefix] = preds.loc[:, preds.columns.str.contains(prefix, regex=False)].sum(axis=1)
-        truth = truth[['Time [s]', 'Precursor [ug/m3]', 'Gas [ug/m3]', 'Aerosol [ug_m3]', 'id']]
+        true_df = true_df[['Time [s]', 'Precursor [ug/m3]', 'Gas [ug/m3]', 'Aerosol [ug_m3]', 'id']]
         preds = preds[['Time [s]', 'Precursor [ug/m3]', 'Gas [ug/m3]', 'Aerosol [ug_m3]', 'id']]
 
     exps = preds['id'].unique()
-    true_sub = truth.loc[truth['id'].isin(exps)]
+    true_sub = true_df.loc[true_df['id'].isin(exps)]
     true_sub = true_sub.groupby('id').apply(lambda x: x.iloc[seq_length - 1: num_timesteps, :]).reset_index(drop=True)
     true_sub = true_sub.sort_values(['id', 'Time [s]']).reset_index(drop=True)
     preds = preds.sort_values(['id', 'Time [s]']).reset_index(drop=True)
-
     return true_sub, preds
 
 
