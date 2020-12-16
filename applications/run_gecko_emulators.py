@@ -50,12 +50,12 @@ def main():
     # Run multiple GECKO experiments in parallel
     cluster = LocalCluster(processes=True, n_workers=args.n_workers, threads_per_worker=args.threads_per_worker)
     client = Client(cluster)
-    predictions, single_ts_metrics, multi_ts_metrics = {}, {}, {}
+    single_ts_metrics, multi_ts_metrics = {}, {}
     for model_type in config["model_configurations"].keys():
         if model_type == 'single_ts_models':
             for model_name in config['model_configurations'][model_type].keys():
                 seq_length = 1
-                single_ts_metrics[model_name] = {}
+                single_ts_metrics[model_name], predictions = {}, {}
                 for member in range(ensemble_members):
                     nnet_path = join(output_path, 'models', f'{species}_{model_name}_{member}')
                     mod = GeckoBoxEmulator(neural_net_path=nnet_path, output_scaler=y_scaler,
