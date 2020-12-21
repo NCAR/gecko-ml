@@ -33,6 +33,9 @@ def main():
     input_cols = config['input_vars']
     output_cols = config['output_vars']
     ensemble_members = config['ensemble_members']
+    seed = config['random_seed']
+    
+    np.random.seed(seed)
 
     # Read validation data and scaler objects
     val_in = pd.read_parquet(join(output_path, 'validation_data', f'{species}_in_val.parquet'))
