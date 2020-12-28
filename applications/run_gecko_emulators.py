@@ -34,7 +34,7 @@ def main():
     output_cols = config['output_vars']
     ensemble_members = config['ensemble_members']
     seed = config['random_seed']
-
+    
     np.random.seed(seed)
 
     # Read validation data and scaler objects
