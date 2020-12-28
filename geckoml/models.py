@@ -1,7 +1,7 @@
 from tensorflow.keras.layers import Input, Dense, Dropout, GaussianNoise, Activation, \
     Concatenate, BatchNormalization, LSTM, Conv1D, AveragePooling1D, MaxPooling1D, LeakyReLU
 from tensorflow.keras.models import Model
-from tensorflow.keras.regularizers import l2
+from tensorflow.keras.regularizers import l1, l2, l1_l2
 from tensorflow.keras.optimizers import Adam, SGD
 import tensorflow.keras.backend as K
 from keras_self_attention import SeqSelfAttention
@@ -42,8 +42,8 @@ class DenseNeuralNetwork(object):
     def __init__(self, hidden_layers=1, hidden_neurons=4, activation="relu", output_layers=1,
                  output_activation="linear", optimizer="adam", loss="mse", loss_weights=1, use_noise=False,
                  noise_sd=0.01, lr=0.001, use_dropout=False, dropout_alpha=0.1, batch_size=128, epochs=2,
-                 l2_weight=0.01, sgd_momentum=0.9, adam_beta_1=0.9, adam_beta_2=0.999, decay=0, verbose=0,
-                 classifier=False):
+                 kernel_reg='l2', l1_weight=0.01, l2_weight=0.01, sgd_momentum=0.9, adam_beta_1=0.9, adam_beta_2=0.999,
+                 epsilon=1e-7, decay=0, verbose=0, classifier=False):
         self.hidden_layers = hidden_layers
         self.hidden_neurons = hidden_neurons
         self.activation = activation
@@ -54,9 +54,12 @@ class DenseNeuralNetwork(object):
         self.sgd_momentum = sgd_momentum
         self.adam_beta_1 = adam_beta_1
         self.adam_beta_2 = adam_beta_2
+        self.epsilon = epsilon
         self.loss = loss
         self.loss_weights = loss_weights
         self.lr = lr
+        self.kernel_reg = kernel_reg
+        self.l1_weight = l1_weight
         self.l2_weight = l2_weight
         self.batch_size = batch_size
         self.use_noise = use_noise
@@ -69,6 +72,11 @@ class DenseNeuralNetwork(object):
         self.classifier = classifier
         self.y_labels = None
         self.model = None
+
+    def x_sigmoid(self, y_actual, y_pred):
+        x = y_actual - y_pred
+        custom_loss = K.mean(2 * x / (1 + K.exp(-x)) - x)
+        return custom_loss
 
     def build_neural_network(self, inputs, outputs):
         """
@@ -83,9 +91,18 @@ class DenseNeuralNetwork(object):
         if self.activation == 'leaky':
             self.activation = LeakyReLU()
 
+        if self.kernel_reg == 'l1':
+            self.kernel_reg = l1(self.l1_weight)
+        elif self.kernel_reg == 'l2':
+            self.kernel_reg = l2(self.l2_weight)
+        elif self.kernel_reg == 'l1_l2':
+            self.kernel_reg = l1_l2(self.l1_weight, self.l2_weight)
+        else:
+            self.kernel_reg = None
+
         for h in range(self.hidden_layers):
             nn_model = Dense(self.hidden_neurons, activation=self.activation,
-                             kernel_regularizer=l2(self.l2_weight), name=f"dense_{h:02d}")(nn_model)
+                             kernel_regularizer=self.kernel_reg, name=f"dense_{h:02d}")(nn_model)
             if self.use_dropout:
                 nn_model = Dropout(self.dropout_alpha, name=f"dropout_h_{h:02d}")(nn_model)
             if self.use_noise:
@@ -97,10 +114,16 @@ class DenseNeuralNetwork(object):
         output_layers = [x for x in nn_model_out.values()]
         self.model = Model(nn_input, output_layers)
         if self.optimizer == "adam":
-            self.optimizer_obj = Adam(lr=self.lr, beta_1=self.adam_beta_1, beta_2=self.adam_beta_2, decay=self.decay)
+            self.optimizer_obj = Adam(lr=self.lr, beta_1=self.adam_beta_1, beta_2=self.adam_beta_2,
+                                      epsilon=self.epsilon, decay=self.decay)
         elif self.optimizer == "sgd":
             self.optimizer_obj = SGD(lr=self.lr, momentum=self.sgd_momentum, decay=self.decay)
-        self.model.compile(optimizer=self.optimizer_obj, loss=self.loss, loss_weights=self.loss_weights)
+
+        if self.loss == 'Xsigmoid':
+            self.model.compile(optimizer=self.optimizer_obj, loss=self.x_sigmoid, loss_weights=self.loss_weights)
+        else:
+            self.model.compile(optimizer=self.optimizer_obj, loss=self.loss, loss_weights=self.loss_weights)
+
 
     def fit(self, x, y):
         inputs = x.shape[1]
@@ -204,7 +227,7 @@ class LongShortTermMemoryNetwork(object):
                  output_activation="linear", optimizer="adam", loss="mse", loss_weights=1,
                  use_noise=False, noise_sd=0.01, lr=0.001, use_dropout=False, dropout_alpha=0.1, batch_size=128,
                  epochs=2, l2_weight=0.01, sgd_momentum=0.9, adam_beta_1=0.9, adam_beta_2=0.999, decay=0, verbose=0,
-                 classifier=False):
+                 epsilon=1e-7, classifier=False):
         self.hidden_layers = hidden_layers
         self.hidden_neurons = hidden_neurons
         self.activation = activation
@@ -215,6 +238,7 @@ class LongShortTermMemoryNetwork(object):
         self.sgd_momentum = sgd_momentum
         self.adam_beta_1 = adam_beta_1
         self.adam_beta_2 = adam_beta_2
+        self.epsilon = epsilon
         self.loss = loss
         self.loss_weights = loss_weights
         self.lr = lr
@@ -262,7 +286,8 @@ class LongShortTermMemoryNetwork(object):
         output_layers = [x for x in nn_model_out.values()]
         self.model = Model(nn_input, output_layers)
         if self.optimizer == "adam":
-            self.optimizer_obj = Adam(lr=self.lr, beta_1=self.adam_beta_1, beta_2=self.adam_beta_2, decay=self.decay)
+            self.optimizer_obj = Adam(lr=self.lr, beta_1=self.adam_beta_1, beta_2=self.adam_beta_2,
+                                      epsilon=self.epsilon, decay=self.decay)
         elif self.optimizer == "sgd":
             self.optimizer_obj = SGD(lr=self.lr, momentum=self.sgd_momentum, decay=self.decay)
         self.model.compile(optimizer=self.optimizer_obj, loss=self.loss, loss_weights=self.loss_weights)

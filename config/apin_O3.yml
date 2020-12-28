@@ -106,10 +106,13 @@ model_configurations:
       epochs: 30
       use_dropout: False
       dropout_alpha: 0.1
-      l2_weight: 0.01
+      kernel_reg: 'l2'
+      l1_weight: 0.001
+      l2_weight: 0.001
       sgd_momentum: 0.9
       adam_beta_1: 0.9
       adam_beta_2: 0.999
+      epsilon: 0.0000001
       decay: 0
       verbose:  1
       classifier: False
@@ -134,6 +137,7 @@ model_configurations:
       sgd_momentum: 0.9
       adam_beta_1: 0.9
       adam_beta_2: 0.999
+      epsilon: 0.0000001
       decay: 0
       verbose:  1
       classifier: False

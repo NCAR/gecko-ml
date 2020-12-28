@@ -123,25 +123,35 @@ def ensembled_metrics(y_true, y_pred, member):
         metrics (pd.dataframe): results for 'Precursor', 'Gas', and 'Aerosol' for a variety of metrics 
     """
 
+    #y_pred.to_csv('/glade/work/cbecker/pred_csv.csv')
+    y_pred_copy = y_pred.copy()
+    for col in ['Precursor [ug/m3]', 'Gas [ug/m3]', 'Aerosol [ug_m3]']:
+        y_pred_copy = y_pred_copy.groupby('id').filter(lambda x: x[col].max() < 1)
+
+    stable_exps = y_pred_copy['id'].unique()
+    stable_true = y_true[y_true['id'].isin(stable_exps)]
+    n_unstable = y_true['id'].nunique() - stable_true['id'].nunique()
+
     df = pd.DataFrame(columns=['ensemble_member', 'mass_phase', 'mean_mse', 'mean_mae', 'mean_r2', 'mean_hd', 'sd_mse',
-                               'sd_mae', 'sd_r2', 'sd_hd', 'n_val_exps'])
+                               'sd_mae', 'sd_r2', 'sd_hd', 'n_val_exps', 'n_unstable'])
 
     for col in y_true.columns[1:-1]:
         
         l = []
         l.append(member)
         l.append(col)
-        l.append(mean_squared_error(y_true[col], y_pred[col]))
-        l.append(mean_absolute_error(y_true[col], y_pred[col]))
-        l.append(r2_corr(y_true[col], y_pred[col]))
-        l.append(hellinger_distance(y_true[col], y_pred[col]))
+        l.append(mean_squared_error(stable_true[col], y_pred_copy[col]))
+        l.append(mean_absolute_error(stable_true[col], y_pred_copy[col]))
+        l.append(r2_corr(stable_true[col], y_pred_copy[col]))
+        l.append(hellinger_distance(stable_true[col], y_pred_copy[col]))
 
-        temp_df = pd.DataFrame(data={'t': y_true[col].values, 'p': y_pred[col].values, 'id': y_true['id']})
+        temp_df = pd.DataFrame(data={'t': stable_true[col].values, 'p': y_pred_copy[col].values, 'id': stable_true['id']})
         l.append(temp_df.groupby('id').apply(lambda x: mean_squared_error(x['t'], x['p'])).std())
         l.append(temp_df.groupby('id').apply(lambda x: mean_absolute_error(x['t'], x['p'])).std())
         l.append(temp_df.groupby('id').apply(lambda x: r2_corr(x['t'], x['p'])).std())
         l.append(temp_df.groupby('id').apply(lambda x: hellinger_distance(x['t'], x['p'])).std())
         l.append(temp_df['id'].nunique())
+        l.append(n_unstable)
 
         df = df.append(pd.DataFrame([l], columns=df.columns))
 
