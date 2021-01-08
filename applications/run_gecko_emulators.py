@@ -6,7 +6,8 @@ import yaml
 import time
 import joblib
 from geckoml.box import GeckoBoxEmulator, GeckoBoxEmulatorTS
-from geckoml.metrics import ensembled_metrics, match_true_exps, plot_ensemble, plot_bootstrap_ci, plot_crps_bootstrap
+from geckoml.metrics import ensembled_metrics, match_true_exps, plot_ensemble, plot_bootstrap_ci, \
+    plot_crps_bootstrap, plot_unstability
 from geckoml.data import inverse_log_transform, save_metrics
 from dask.distributed import Client, LocalCluster
 from os.path import join
@@ -81,6 +82,7 @@ def main():
                 save_metrics(single_ts_metrics[model_name], output_path, model_name, ensemble_members, 'box')
                 plot_bootstrap_ci(all_truth, all_preds, columns, output_path, species, model_name)
                 plot_crps_bootstrap(all_truth, all_preds, columns, output_path, species, model_name)
+                plot_unstability(all_preds, columns, output_path, model_name)
 
         elif model_type == 'multi_ts_models':
             for model_name in config['model_configurations'][model_type].keys():

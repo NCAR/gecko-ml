@@ -2,11 +2,12 @@ from sklearn.metrics import mean_squared_error, mean_absolute_error
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+import seaborn as sns
 import numpy as np
 import pandas as pd
 import properscoring as ps
 from os.path import join
-from .data import inverse_log_transform
+
 
 def calc_pdf_hist(x, x_bins):
     """ Calculate Probability Density Function. Normalized as the integral over the range == 1
@@ -36,6 +37,7 @@ def root_mean_squared_error(y_true, y_pred):
     """
     return np.sqrt(mean_squared_error(y_true, y_pred))
 
+
 def mean_abs_error(y_true, y_pred):
     """ Calculate the Mean Absolute Error
     Args:
@@ -43,6 +45,7 @@ def mean_abs_error(y_true, y_pred):
         y_pred (np.array): Predicted output data
     """
     return mean_absolute_error(y_true, y_pred)
+
 
 def hellinger_distance(y_true, y_pred, bins=50):
     """ Calculate Hellenger distance between two distributions
@@ -97,7 +100,6 @@ def ensembled_metrics(y_true, y_pred, member):
         metrics (pd.dataframe): results for 'Precursor', 'Gas', and 'Aerosol' for a variety of metrics 
     """
 
-    #y_pred.to_csv('/glade/work/cbecker/pred_csv.csv')
     y_pred_copy = y_pred.copy()
     for col in ['Precursor [ug/m3]', 'Gas [ug/m3]', 'Aerosol [ug_m3]']:
         y_pred_copy = y_pred_copy.groupby('id').filter(lambda x: x[col].max() < 1)
@@ -423,3 +425,34 @@ def plot_crps_bootstrap(truth, preds, columns, output_path, species, model_name,
             fontsize=24)
         plt.savefig(join(output_path, f'plots/{species}_CRPS_{model_name}.png'), bbox_inches='tight')
 
+
+def plot_unstability(preds, columns, output_path, model_name, stability_thresh=1):
+    """
+    Plot unstable runs by timestep for each mass phase specified
+    Args:
+        preds (pd.DataFrame): Predictions
+        columns (list): Mass phases to be plotted
+        output_path (str): Base output path
+        model_name (str): Name of model plotted
+        stability_thresh (float): Magnitude of threshold to determine instability (> thresh or < -thresh)
+
+    Returns:
+    """
+
+    total_runs = int(len(preds) / preds['Time [s]'].nunique())
+    time = preds['Time [s]'].unique() / 60 / 60 / 24
+    colors = ['lightblue', 'red', 'green']
+    plt.figure(figsize=(24, 8))
+    plt.tick_params(axis='both', labelsize=18)
+
+    for i, column in enumerate(columns):
+        x = preds.groupby('Time [s]')[column].apply(
+            lambda x: x[(x > stability_thresh) | (x < -stability_thresh)].count())
+        sns.lineplot(time, x, color='k')
+        plt.fill_between(time, x, color=colors[i], label=column)
+
+    plt.legend(prop={'size': 16})
+    plt.xlabel('Simulation Days', fontsize=20)
+    plt.ylabel('Number Runaways', fontsize=20)
+    plt.title(f'Ensemble Counts of Runaway Errors ({total_runs} Total Runs)', fontsize=24)
+    plt.savefig(join(output_path, f'plots/unstable_{model_name}.png'), bbox_inches=True)
