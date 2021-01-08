@@ -90,7 +90,7 @@ def get_stability(preds, stability_thresh):
     return stable_exps, unstable_exps
 
 
-def ensembled_metrics(y_true, y_pred, member):
+def ensembled_metrics(y_true, y_pred, member, stability_thresh=1):
     """ Call a variety of metrics to be calculated (Hellenger distance R2, and RMSE currently) on Box emulator results.
         If bins were not aggregated, all bins are summed before metrics are calculated.
     Args:
@@ -99,17 +99,17 @@ def ensembled_metrics(y_true, y_pred, member):
     Returns:
         metrics (pd.dataframe): results for 'Precursor', 'Gas', and 'Aerosol' for a variety of metrics 
     """
-
     y_pred_copy = y_pred.copy()
     for col in ['Precursor [ug/m3]', 'Gas [ug/m3]', 'Aerosol [ug_m3]']:
-        y_pred_copy = y_pred_copy.groupby('id').filter(lambda x: x[col].max() < 1)
+        y_pred_copy = y_pred_copy.groupby('id').filter(
+            lambda x: (x[col].max() < stability_thresh) & (x[col].min() > -stability_thresh))
 
     stable_exps = y_pred_copy['id'].unique()
     stable_true = y_true[y_true['id'].isin(stable_exps)]
     n_unstable = y_true['id'].nunique() - stable_true['id'].nunique()
 
-    df = pd.DataFrame(columns=['ensemble_member', 'mass_phase', 'mean_mse', 'mean_mae', 'mean_r2', 'mean_hd', 'sd_mse',
-                               'sd_mae', 'sd_r2', 'sd_hd', 'n_val_exps', 'n_unstable'])
+    df = pd.DataFrame(columns=['ensemble_member', 'mass_phase', 'mean_mse', 'mean_mae', 'Mean % MAE', 'mean_r2',
+                               'mean_hd', 'n_val_exps', 'n_unstable'])
 
     for col in y_true.columns[1:-1]:
         
@@ -118,14 +118,11 @@ def ensembled_metrics(y_true, y_pred, member):
         l.append(col)
         l.append(mean_squared_error(stable_true[col], y_pred_copy[col]))
         l.append(mean_absolute_error(stable_true[col], y_pred_copy[col]))
+        l.append(((stable_true[col] -  y_pred_copy[col]).abs() / stable_true[col] * 100).mean())
         l.append(r2_corr(stable_true[col], y_pred_copy[col]))
         l.append(hellinger_distance(stable_true[col], y_pred_copy[col]))
 
         temp_df = pd.DataFrame(data={'t': stable_true[col].values, 'p': y_pred_copy[col].values, 'id': stable_true['id']})
-        l.append(temp_df.groupby('id').apply(lambda x: mean_squared_error(x['t'], x['p'])).std())
-        l.append(temp_df.groupby('id').apply(lambda x: mean_absolute_error(x['t'], x['p'])).std())
-        l.append(temp_df.groupby('id').apply(lambda x: r2_corr(x['t'], x['p'])).std())
-        l.append(temp_df.groupby('id').apply(lambda x: hellinger_distance(x['t'], x['p'])).std())
         l.append(temp_df['id'].nunique())
         l.append(n_unstable)
 
@@ -455,4 +452,4 @@ def plot_unstability(preds, columns, output_path, model_name, stability_thresh=1
     plt.xlabel('Simulation Days', fontsize=20)
     plt.ylabel('Number Runaways', fontsize=20)
     plt.title(f'Ensemble Counts of Runaway Errors ({total_runs} Total Runs)', fontsize=24)
-    plt.savefig(join(output_path, f'plots/unstable_{model_name}.png'), bbox_inches=True)
+    plt.savefig(join(output_path, f'plots/unstable_{model_name}.png'), bbox_inches='tight')
