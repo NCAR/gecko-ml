@@ -345,33 +345,37 @@ def crps_ens_bootstrap(truth, preds, columns, n_bs_samples, ci_level):
     Returns:
         (Dicts): Mean CRPS, Lower CRPS CI, Upper CRPS CI
     """
-    p_ensemble_mean = preds.groupby(['id', 'Time [s]']).mean()
-    mean_truth = truth.groupby('Time [s]').mean()[columns]
-
-    num_exps = truth['id'].nunique()
+    num_exps = truth.index.levels[1].nunique()
+    time_steps = truth['Time [s]'].unique()
     min_quant = (1 - ci_level) / 2
     max_quant = 1 - min_quant
-    all_crps, upper_ci, lower_ci = {}, {}, {}
+    all_crps, all_upper_ci, all_lower_ci = {}, {}, {}
 
     for phase in columns:
 
-        bs_list = []
+        crps, upper_ci, lower_ci = [], [], []
 
-        obs = mean_truth[phase]
-        p_ens = p_ensemble_mean[phase].unstack(['id'])
+        for j, time_step in enumerate(time_steps):
 
-        all_crps[phase] = ps.crps_ensemble(obs, p_ens)
+            bs_crps = []
 
-        for i in range(n_bs_samples):
-            bs_sample = p_ens.sample(num_exps, replace=True, axis=1)
-            bs_crps = ps.crps_ensemble(obs, bs_sample)
-            bs_list.append(bs_crps)
+            t_sub = truth[truth['Time [s]'] == time_step][phase].unstack('member')[0]
+            p_sub = preds[preds['Time [s]'] == time_step][phase].unstack('member')
+            crps_sub = ps.crps_ensemble(t_sub, p_sub)
+            crps.append(crps_sub.mean())
 
-        all_bs_crps = np.vstack(bs_list)
-        upper_ci[phase] = np.quantile(all_bs_crps, max_quant, axis=0)
-        lower_ci[phase] = np.quantile(all_bs_crps, min_quant, axis=0)
+            for i in range(n_bs_samples):
+                sample_crps = np.random.choice(crps_sub, num_exps, replace=True)
+                bs_crps.append(sample_crps.mean())
 
-    return all_crps, lower_ci, upper_ci
+            upper_ci.append(np.quantile(bs_crps, max_quant))
+            lower_ci.append(np.quantile(bs_crps, min_quant))
+
+        all_crps[phase] = crps
+        all_upper_ci[phase] = upper_ci
+        all_lower_ci[phase] = lower_ci
+
+    return all_crps, all_lower_ci, all_upper_ci
 
 
 def plot_crps_bootstrap(truth, preds, columns, output_path, species, model_name, n_bs_samples=10000, ci_level=0.95,
