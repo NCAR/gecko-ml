@@ -121,9 +121,14 @@ class BoxBaseTrainer:
         y_true_aero = y_true[:, :, 15:]
         y_pred_aero = y_pred[:, :, 15:]
         
-        mse_precursor = a * nn.MSELoss()(y_true_precursor, y_pred_precursor)
-        mse_gas = b * nn.MSELoss()(y_true_gas, y_pred_gas)
-        mse_aero = c * nn.MSELoss()(y_true_aero, y_pred_aero)
+#         mse_precursor = a * nn.MSELoss()(y_true_precursor, y_pred_precursor)
+#         mse_gas = b * nn.MSELoss()(y_true_gas, y_pred_gas)
+#         mse_aero = c * nn.MSELoss()(y_true_aero, y_pred_aero)
+        
+        mse_precursor = a * nn.L1Loss()(y_true_precursor, y_pred_precursor)
+        mse_gas = b * nn.L1Loss()(y_true_gas, y_pred_gas)
+        mse_aero = c * nn.L1Loss()(y_true_aero, y_pred_aero)
+        
         mse = (mse_precursor + mse_gas + mse_aero) / (a + b + c)
         
         kld_gas = nn.KLDivLoss()(
@@ -149,7 +154,7 @@ class BoxBaseTrainer:
             self.dataloader,
             total=batches_per_epoch, 
             leave=True
-        )    
+        )
         epoch_losses = {"loss": []}
         for batch_idx, (x, y) in enumerate(batch_group_generator):
             x = x.to(self.device)
@@ -191,6 +196,12 @@ class BoxBaseTrainer:
             batch_group_generator.set_description(to_print)
             batch_group_generator.update()
             
+            if not np.isfinite(np.mean(epoch_losses["loss"])):
+                logger.warning(
+                    f"Ending training early due to an exploding loss {np.mean(epoch_losses['loss'])}"
+                )
+                break
+            
             if batch_idx % batches_per_epoch == 0 and batch_idx > 0:
                 break
             
@@ -229,6 +240,12 @@ class BoxBaseTrainer:
                 to_print = "val_loss: {:.3f}".format(np.mean(epoch_losses["loss"]))
                 batch_group_generator.set_description(to_print)
                 batch_group_generator.update()
+                
+                if not np.isfinite(np.mean(epoch_losses["loss"])):
+                    logger.warning(
+                        f"Ending training early due to an exploding loss {np.mean(epoch_losses['loss'])}"
+                    )
+                    break
             
         return np.mean(epoch_losses["loss"]) 
     
@@ -295,6 +312,45 @@ class BoxBaseTrainer:
                 
         return min(val_loss)
     
+    
+    def predict(self, test_gen, test_dataloader):
 
+        self.model.eval()
+        batches_per_epoch = int(np.ceil(test_gen.__len__() / self.batch_size))
+
+        with torch.no_grad():
+
+            batch_group_generator = tqdm(
+                test_dataloader,
+                total=batches_per_epoch, 
+                leave=True
+            )
+
+            epoch_losses = {"loss": [], "true": [], "pred": []}
+            for (x, y) in batch_group_generator:
+                x = x.to(self.device)
+                y = y.to(self.device)
+                y_true, y_pred = [], []
+                for i in range(y.size(1)):
+                    next_x = self.model(x[:,i,:])
+                    y_true.append(y[:, i])
+                    y_pred.append(next_x)
+                    if i < (y.shape[1]-1):
+                        x[:, i+1, :self.output_size] = next_x
+                y_true = torch.stack(y_true).permute(1,0,2)
+                y_pred = torch.stack(y_pred).permute(1,0,2)
+                loss = self.criterion(y_true, y_pred)
+                epoch_losses["loss"].append(loss.item())
+                epoch_losses["true"].append(y_true.cpu().detach().numpy())
+                epoch_losses["pred"].append(y_pred.cpu().detach().numpy())
+
+                # update tqdm
+                to_print = "test_loss: {:.3f}".format(np.mean(epoch_losses["loss"]))
+                batch_group_generator.set_description(to_print)
+                batch_group_generator.update()
+    
+        return epoch_losses
+    
+    
     def tf_annealer(self, epoch):
         return 1.0 * self.gamma ** epoch # 1/(1 + self.decay * epoch) 

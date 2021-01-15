@@ -49,6 +49,7 @@ class LoadGeckoData:
         self.save_path = save_path
         self.summary_file = summary_file
         self.experiment_subset = experiment_subset
+
         self.min_exp = min_exp
         self.max_exp = max_exp
         self.cached_dir = cached_dir
@@ -170,7 +171,10 @@ class LoadGeckoData:
             output_subset = self.scaler_y.transform(
                 output_subset.drop(['Time [s]', 'id'], axis=1)
             )
-        
+
+        if fit:
+            return input_subset, output_subset
+
         reshaped_input = torch.from_numpy(input_subset.astype(np.float32))
         reshaped_output = torch.from_numpy(output_subset.astype(np.float32))
             
@@ -184,8 +188,8 @@ class LoadGeckoData:
         if isinstance(self.memory_buffer, dict) and not fit:
             self.memory_buffer[idx] = (reshaped_input, reshaped_output)
                 
-        if fit:
-            return input_subset, output_subset
+        #if fit:
+        #    return input_subset, output_subset
         
         return reshaped_input, reshaped_output
     
@@ -240,7 +244,7 @@ class LoadGeckoData:
             )
             worker = partial(self.__getitem__, fit = True)
             with Pool(8) as p:
-                xs, ys = zip(*[(x,y) for (x,y) in tqdm(
+                xs, ys = zip(*[(x,y) for (x,y) in tqdm.tqdm(
                     p.imap(worker, range(len(self.experiment_subset))),
                     total = len(self.experiment_subset))
                 ])
@@ -273,3 +277,83 @@ class LoadGeckoData:
             logger.info(
                 f"Saved data transformation models to {filepath}"
             )
+
+            
+class BatchGeckoData:
+    
+    def __init__(self, split, data_path, 
+                 input_cols, output_cols, 
+                 shuffle = True, scaler_x = None, scaler_y = None):
+        
+        self.data_path = data_path
+        self.split = split
+        self.input_cols = input_cols
+        self.output_cols = output_cols
+
+        self.shuffle = shuffle
+        
+        self.scaler_x = scaler_x
+        self.scaler_y = scaler_y
+        
+        self.load()
+        self.on_epoch_end()
+        
+    def load(self):
+        self.x = pd.read_csv(os.path.join(self.data_path, f"x_{self.split}.csv"))
+        self.y = pd.read_csv(os.path.join(self.data_path, f"y_{self.split}.csv"))        
+        self.weights = self.y["weight"].copy().to_numpy(dtype=np.float32)
+        
+        self.x = self.x[self.input_cols].copy()
+        self.y = self.y[self.output_cols].copy()
+        
+        self.x['Precursor [ug/m3]'] = np.log(self.x['Precursor [ug/m3]'])
+        self.y['Precursor [ug/m3]'] = np.log(self.y['Precursor [ug/m3]'])
+        
+        drop_cols = ["index", "id", "indexer"]
+        for df in [self.x, self.y]:
+            keep_cols = [x for x in df.columns if x not in drop_cols]
+            df = df[keep_cols].copy()
+            
+        if self.scaler_x is not None and self.scaler_y is not None:
+            self.x = self.scaler_x.transform(
+                self.x.drop(['Time [s]', 'id'], axis=1)
+            )
+            self.y = self.scaler_y.transform(
+                self.y.drop(['Time [s]', 'id'], axis=1)
+            )
+        else:
+            self.scaler_x = MinMaxScaler((0, 1))
+            self.scaler_y = MinMaxScaler((0, 1))
+            self.x = self.scaler_x.fit_transform(
+                self.x.drop(['Time [s]', 'id'], axis=1)
+            )
+            self.y = self.scaler_y.fit_transform(
+                self.y.drop(['Time [s]', 'id'], axis=1)
+            )
+            with open(os.path.join(self.data_path, "scalers.pkl"), "wb") as fid:
+                pickle.dump([self.scaler_x, self.scaler_y], fid)
+                
+    def get_transform(self):
+        return self.scaler_x, self.scaler_y
+        
+    def __len__(self):
+        return self.x.shape[0]
+    
+    def __getitem__(self, idx):
+        
+        self.processed += 1
+        if self.processed == self.__len__():
+            self.on_epoch_end()
+        
+        x_data = torch.from_numpy(self.x[idx].astype(np.float32))
+        y_data = torch.from_numpy(self.y[idx].astype(np.float32))
+        w_data = np.array([self.weights[idx].astype(np.float32)])
+        w_data = torch.from_numpy(w_data)
+        
+        return x_data, y_data, w_data
+    
+    def on_epoch_end(self):
+        'Updates indexes after each epoch'
+        self.processed = 0
+        if self.shuffle == True:
+            pass
