@@ -168,7 +168,6 @@ def plot_ensemble(truth, preds, output_path, species, model_name):
         model_name: Model Name (used for labeling)
     """
     all_exps = truth['id'].unique()
-    np.random.seed(1229)
     exps = np.random.choice(all_exps, 3, replace=False)
     color = ['r', 'b', 'g']
     mean_ensemble = pd.concat([x for x in preds.values()]).groupby(level=0).mean()
@@ -332,15 +331,15 @@ def plot_bootstrap_ci(truth, preds, columns, output_path, species, model_name, n
     return
 
 
-def crps_ens_bootstrap(truth, preds, columns, n_bs_samples, ci_level):
+def crps_ens_bootstrap(truth, preds, columns, n_bs_samples=1000, ci_level=0.95):
     """
     Calculate Continuous Ranked Probability Score across validation experiments for ensemble
     Args:
         truth (pd.DataFrame): Modeled observations
         preds (pd.DataFrame): Predictions
         columns: Columns to calculate CRPS on
-        n_bs_samples (int): Number of bootstrap resamples
-        ci_level (float): Confidence level in decimal form
+        n_bs_samples (int): Number of bootstrap resamples (defaults to 1000)
+        ci_level (float): Confidence level in decimal form (defaults to 0.95)
 
     Returns:
         (Dicts): Mean CRPS, Lower CRPS CI, Upper CRPS CI
@@ -378,7 +377,7 @@ def crps_ens_bootstrap(truth, preds, columns, n_bs_samples, ci_level):
     return all_crps, all_lower_ci, all_upper_ci
 
 
-def plot_crps_bootstrap(truth, preds, columns, output_path, species, model_name, n_bs_samples=10000, ci_level=0.95,
+def plot_crps_bootstrap(truth, preds, columns, output_path, species, model_name, n_bs_samples=1000, ci_level=0.95,
                         only_stable=True, stable_thresh=1):
     """
     Plot Continuous Ranked Probability Score across validation experiments for ensemble
@@ -389,8 +388,8 @@ def plot_crps_bootstrap(truth, preds, columns, output_path, species, model_name,
         output_path (str): Base path to save to
         species (str): Species name (used for titling and file naming)
         model_name (str): Model name (used for titleing and file naming)
-        n_bs_samples (int): Number of bootstrap resamples
-        ci_level (float): Confidence lelel in decimal form
+        n_bs_samples (int): Number of bootstrap resamples (defaults to 1000)
+        ci_level (float): Confidence level in decimal form (defaults to 0.95)
         only_stable (bool): If only stable experiments should be used
         stable_thresh (float): Magnitude to determine if experiments are stable (only used if only_stable=True)
 
