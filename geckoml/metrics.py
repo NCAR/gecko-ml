@@ -2,10 +2,12 @@ from sklearn.metrics import mean_squared_error, mean_absolute_error
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+import seaborn as sns
 import numpy as np
 import pandas as pd
+import properscoring as ps
 from os.path import join
-from .data import inverse_log_transform
+
 
 def calc_pdf_hist(x, x_bins):
     """ Calculate Probability Density Function. Normalized as the integral over the range == 1
@@ -35,6 +37,7 @@ def root_mean_squared_error(y_true, y_pred):
     """
     return np.sqrt(mean_squared_error(y_true, y_pred))
 
+
 def mean_abs_error(y_true, y_pred):
     """ Calculate the Mean Absolute Error
     Args:
@@ -42,6 +45,7 @@ def mean_abs_error(y_true, y_pred):
         y_pred (np.array): Predicted output data
     """
     return mean_absolute_error(y_true, y_pred)
+
 
 def hellinger_distance(y_true, y_pred, bins=50):
     """ Calculate Hellenger distance between two distributions
@@ -67,53 +71,26 @@ def r2_corr(y_true, y_pred):
     return np.corrcoef(y_true, y_pred)[0, 1] ** 2
 
 
-def mae_time_series(y_true, y_pred):
-    """ Calculate the Mean Absolute Error across timesteps
-    Args:
-        y_true (np.array): True output data
-        y_pred (np.array): Predicted output data
+def get_stability(preds, stability_thresh):
     """
-    time_series = y_true['Time [s]']
-    y_true = y_true.sort_values(['id', 'Time [s]'], ascending=True).iloc[:, 1:-1]
-    y_pred = y_pred.sort_values(['id', 'Time [s]'], ascending=True).iloc[:, :-2]
-
-    if len(y_true.columns) > 5:
-        preds = np.empty((y_pred.shape[0], 3))
-        preds[:, 0] = y_pred.iloc[:, 0]
-        preds[:, 1] = np.sum(y_pred.iloc[:, 0:14], axis=1)
-        preds[:, 2] = np.sum(y_pred.iloc[:, 14:-2], axis=1)
-
-        truth = np.empty((y_true.shape[0], 3))
-        truth[:, 0] = y_true.iloc[:, 1]
-        truth[:, 1] = np.sum(y_true.iloc[:, 2:16], axis=1)
-        truth[:, 2] = np.sum(y_true.iloc[:, 16:-1], axis=1)
-
-        cols = ['Precursor [ug/m3]', 'Gas [ug/m3]', 'Aerosol [ug_m3]']
-        y_true, y_pred = pd.DataFrame(truth, columns=cols), pd.DataFrame(preds, columns=cols)
-
-    df_diff = np.abs(y_true - y_pred)
-
-    df_diff['Time [s]'] = time_series
-    mae = df_diff.groupby('Time [s]').mean()
-
-    return mae
-
-def plot_mae_ts(y_true, y_pred, output_path, model_name, species):
-    """ Plot and save an average mean absolute error per timestep, across experiments
+    Determine if any value has crossed the positive or negative magnitude of threshold and lable unstable if true
     Args:
-        y_true (np.array): True output data
-        y_pred (np.array): Predicted output data
-        output_path (str): Output path top save figure to
-        model_name (str): Model name used to label figure
+        preds (pd.DataFrame): Predictions
+        stability_thresh: Threshold to determine if an exp has gone unstable (uses positive and negative values)
+
+    Returns:
+        stable_exps (list)
+        unstable_exps (list)
     """
+    unstable = preds.groupby('id')['Precursor [ug/m3]'].apply(
+        lambda x: x[(x > stability_thresh) | (x < -stability_thresh)].any())
+    stable_exps = unstable[unstable == False].index
+    unstable_exps = unstable[unstable == True].index
 
-    mae = mae_time_series(y_true, y_pred)
-    ax = mae.plot()
-    ax.set_title('{} - MAE per Timestep'.format(model_name))
-    fig = ax.get_figure()
-    fig.savefig(join(output_path, 'plots', f'{species}_{model_name}_mae_ts.png'))
+    return stable_exps, unstable_exps
 
-def ensembled_metrics(y_true, y_pred, member):
+
+def ensembled_metrics(y_true, y_pred, member, stability_thresh=1):
     """ Call a variety of metrics to be calculated (Hellenger distance R2, and RMSE currently) on Box emulator results.
         If bins were not aggregated, all bins are summed before metrics are calculated.
     Args:
@@ -122,18 +99,17 @@ def ensembled_metrics(y_true, y_pred, member):
     Returns:
         metrics (pd.dataframe): results for 'Precursor', 'Gas', and 'Aerosol' for a variety of metrics 
     """
-
-    #y_pred.to_csv('/glade/work/cbecker/pred_csv.csv')
     y_pred_copy = y_pred.copy()
     for col in ['Precursor [ug/m3]', 'Gas [ug/m3]', 'Aerosol [ug_m3]']:
-        y_pred_copy = y_pred_copy.groupby('id').filter(lambda x: x[col].max() < 1)
+        y_pred_copy = y_pred_copy.groupby('id').filter(
+            lambda x: (x[col].max() < stability_thresh) & (x[col].min() > -stability_thresh))
 
     stable_exps = y_pred_copy['id'].unique()
     stable_true = y_true[y_true['id'].isin(stable_exps)]
     n_unstable = y_true['id'].nunique() - stable_true['id'].nunique()
 
-    df = pd.DataFrame(columns=['ensemble_member', 'mass_phase', 'mean_mse', 'mean_mae', 'mean_r2', 'mean_hd', 'sd_mse',
-                               'sd_mae', 'sd_r2', 'sd_hd', 'n_val_exps', 'n_unstable'])
+    df = pd.DataFrame(columns=['ensemble_member', 'mass_phase', 'mean_mse', 'mean_mae', 'Mean % MAE', 'mean_r2',
+                               'mean_hd', 'n_val_exps', 'n_unstable'])
 
     for col in y_true.columns[1:-1]:
         
@@ -142,14 +118,11 @@ def ensembled_metrics(y_true, y_pred, member):
         l.append(col)
         l.append(mean_squared_error(stable_true[col], y_pred_copy[col]))
         l.append(mean_absolute_error(stable_true[col], y_pred_copy[col]))
+        l.append(((stable_true[col] -  y_pred_copy[col]).abs() / stable_true[col] * 100).mean())
         l.append(r2_corr(stable_true[col], y_pred_copy[col]))
         l.append(hellinger_distance(stable_true[col], y_pred_copy[col]))
 
         temp_df = pd.DataFrame(data={'t': stable_true[col].values, 'p': y_pred_copy[col].values, 'id': stable_true['id']})
-        l.append(temp_df.groupby('id').apply(lambda x: mean_squared_error(x['t'], x['p'])).std())
-        l.append(temp_df.groupby('id').apply(lambda x: mean_absolute_error(x['t'], x['p'])).std())
-        l.append(temp_df.groupby('id').apply(lambda x: r2_corr(x['t'], x['p'])).std())
-        l.append(temp_df.groupby('id').apply(lambda x: hellinger_distance(x['t'], x['p'])).std())
         l.append(temp_df['id'].nunique())
         l.append(n_unstable)
 
@@ -176,6 +149,7 @@ def match_true_exps(truth, preds, num_timesteps, seq_length, aggregate_bins, bin
         true_df = true_df[['Time [s]', 'Precursor [ug/m3]', 'Gas [ug/m3]', 'Aerosol [ug_m3]', 'id']]
         preds = preds[['Time [s]', 'Precursor [ug/m3]', 'Gas [ug/m3]', 'Aerosol [ug_m3]', 'id']]
 
+    preds['Time [s]'] = truth['Time [s]'].values
     exps = preds['id'].unique()
     true_sub = true_df.loc[true_df['id'].isin(exps)]
     true_sub = true_sub.groupby('id').apply(lambda x: x.iloc[seq_length - 1: num_timesteps, :]).reset_index(drop=True)
@@ -224,3 +198,261 @@ def plot_ensemble(truth, preds, output_path, species, model_name):
         axes[0, i].legend()
 
     plt.savefig(join(output_path, 'plots', f'{species}_{model_name}_ensemble.png'), bbox_inches='tight')
+
+
+def bootstrap_ci(truth, preds, columns, n_bs_samples, ci_level):
+    """
+       Calculate MAE across validation experiments for single ensemble member
+       Args:
+           truth (pd.DataFrame): Modeled observations
+           preds (pd.DataFrame): Predictions
+           columns: Columns to plot MAE
+           n_bs_samples (int): Number of bootstrap resamples
+           ci_level (float): Confidence level in decimal form
+       Returns:
+            (Dicts): Mean MAE, Lower CI MAE, Upper CI MAE
+       """
+    err = (truth.loc[:, columns] - preds.loc[:, columns]).abs()
+    err['Time [s]'] = truth['Time [s]'].values
+    err['id'] = truth['id'].values
+    mean_err = err.groupby('Time [s]').mean()
+    err = err.set_index(['id', 'Time [s]']).unstack('id')
+
+    min_quant = (1 - ci_level) / 2
+    max_quant = 1 - min_quant
+
+    n_exps = truth['id'].nunique()
+    error_dict, lower_ci, upper_ci = {}, {}, {}
+
+    for phase in columns:
+
+        l = []
+
+        for i in range(n_bs_samples):
+            bs = err[phase].sample(n_exps, replace=True, axis=1).mean(axis=1)
+            l.append(bs)
+
+        all_bs = np.vstack(l)
+        error_dict[phase] = mean_err[phase].values
+        lower_ci[phase] = np.quantile(all_bs, min_quant, axis=0)
+        upper_ci[phase] = np.quantile(all_bs, max_quant, axis=0)
+
+    return error_dict, lower_ci, upper_ci
+
+
+def plot_bootstrap_ci(truth, preds, columns, output_path, species, model_name, n_bs_samples=10000, ci_level=0.95,
+                      only_stable=True, stable_thresh=1):
+    """
+       Plot MAE across validation experiments for single ensemble member
+       Args:
+           truth (pd.DataFrame): Modeled observations
+           preds (pd.DataFrame): Predictions
+           columns: Columns to plot MAE of
+           output_path (str): Base path to save to
+           species (str): Species name (used for titling and file naming)
+           model_name (str): Model name (used for titling and file naming)
+           n_bs_samples (int): Number of bootstrap resamples
+           ci_level (float): Confidence level in decimal form
+           only_stable (bool): If only stable experiments should be used
+           stable_thresh (float): Magnitude to determine if experiments are stable (only used if only_stable=True)
+
+       Returns:
+
+       """
+    if only_stable:
+        stable_exps = get_stability(preds, stable_thresh)[0]
+        truth = truth[truth['id'].isin(stable_exps)]
+        preds = preds[preds['id'].isin(stable_exps)]
+        truth = truth[truth['member'] == 0]
+        preds = preds[preds['member'] == 0]
+
+    truth = truth[truth['member'] == 0]
+    preds = preds[preds['member'] == 0]
+
+    mean_err, lower_ci, upper_ci = bootstrap_ci(truth, preds, columns, n_bs_samples, ci_level)
+    mean_truth = truth.groupby('Time [s]').mean()
+
+    fig, axs = plt.subplots(len(columns), 1, figsize=(22, 16), sharex=True)
+    fig.subplots_adjust(hspace=0, wspace=0)
+    fig.subplots_adjust(top=0.95)
+
+    for i, ax in enumerate(axs.ravel()):
+
+        colors = ['r', 'g', 'b']
+        time = mean_truth.index / 60 / 60 / 24
+        ax.xaxis.set_tick_params(labelsize=16)
+        ax.plot(time, mean_err[columns[i]], color=colors[i], lw=3, label=columns[i])
+        ax.plot(time, upper_ci[columns[i]], color='k', lw=0.5)
+        ax.plot(time, lower_ci[columns[i]], color='k', lw=0.5)
+        ax.fill_between(time, lower_ci[columns[i]], upper_ci[columns[i]], alpha=0.5, color='grey')
+        ax.set_ylabel(columns[i], fontsize=16)
+        ax.legend(loc=(0.7, 0.85), prop={'size': 16})
+
+        if i == len(columns) - 1:
+            ax.set_xlabel('Time [Days]', fontsize=20)
+        fig.suptitle(f'Bootstapped {int(ci_level * 100)}% Confidence Intervals of MAE Estimates - {species}',
+                     fontsize=24)
+        plt.savefig(join(output_path, f'plots/{species}_MAE_{model_name}.png'), bbox_inches='tight')
+
+    fig, axs = plt.subplots(len(columns), 1, figsize=(22, 16), sharex=True)
+    fig.subplots_adjust(hspace=0, wspace=0)
+    fig.subplots_adjust(top=0.95)
+
+    for i, ax in enumerate(axs.ravel()):
+
+        colors = ['r', 'g', 'b']
+        time = mean_truth.index / 60 / 60 / 24
+        ax.xaxis.set_tick_params(labelsize=16)
+        ax.plot(time, mean_truth[columns[i]], color=colors[i], lw=3, label=columns[i])
+        ax.plot(time, mean_truth[columns[i]] + mean_err[columns[i]], color='k', lw=0.5)
+        ax.plot(time, mean_truth[columns[i]] - mean_err[columns[i]], color='k', lw=0.5)
+        ax.plot(time, mean_truth[columns[i]] + upper_ci[columns[i]], color='k', lw=0.5)
+        ax.plot(time, mean_truth[columns[i]] + lower_ci[columns[i]], color='k', lw=0.5)
+        ax.plot(time, mean_truth[columns[i]] - upper_ci[columns[i]], color='k', lw=0.5)
+        ax.plot(time, mean_truth[columns[i]] - lower_ci[columns[i]], color='k', lw=0.5)
+
+        ax.fill_between(time, mean_truth[columns[i]] + upper_ci[columns[i]],
+                        mean_truth[columns[i]] + lower_ci[columns[i]], alpha=0.5, color='pink')
+        ax.fill_between(time, mean_truth[columns[i]] - upper_ci[columns[i]],
+                        mean_truth[columns[i]] - lower_ci[columns[i]], alpha=0.5, color='pink')
+        ax.fill_between(time, mean_truth[columns[i]] - mean_err[columns[i]],
+                        mean_truth[columns[i]] + mean_err[columns[i]], alpha=0.4, color='grey')
+
+        ax.set_ylabel(columns[i], fontsize=16)
+        ax.legend(loc=(0.82, 0.45), prop={'size': 16})
+
+        if i == len(columns) - 1:
+            ax.set_xlabel('Time [Days]', fontsize=20)
+        fig.suptitle(
+            f'Bootstapped {int(ci_level * 100)}% Confidence Intervals of MAE Estimates With Respect to Mean Data '
+            f'- {species}', fontsize=24)
+        plt.savefig(join(output_path, f'plots/{species}_MAE_data_{model_name}.png'), bbox_inches='tight')
+
+    return
+
+
+def crps_ens_bootstrap(truth, preds, columns, n_bs_samples=1000, ci_level=0.95):
+    """
+    Calculate Continuous Ranked Probability Score across validation experiments for ensemble
+    Args:
+        truth (pd.DataFrame): Modeled observations
+        preds (pd.DataFrame): Predictions
+        columns: Columns to calculate CRPS on
+        n_bs_samples (int): Number of bootstrap resamples (defaults to 1000)
+        ci_level (float): Confidence level in decimal form (defaults to 0.95)
+
+    Returns:
+        (Dicts): Mean CRPS, Lower CRPS CI, Upper CRPS CI
+    """
+    num_exps = truth.index.levels[1].nunique()
+    time_steps = truth['Time [s]'].unique()
+    min_quant = (1 - ci_level) / 2
+    max_quant = 1 - min_quant
+    all_crps, all_upper_ci, all_lower_ci = {}, {}, {}
+
+    for phase in columns:
+
+        crps, upper_ci, lower_ci = [], [], []
+
+        for j, time_step in enumerate(time_steps):
+
+            bs_crps = []
+
+            t_sub = truth[truth['Time [s]'] == time_step][phase].unstack('member')[0]
+            p_sub = preds[preds['Time [s]'] == time_step][phase].unstack('member')
+            crps_sub = ps.crps_ensemble(t_sub, p_sub)
+            crps.append(crps_sub.mean())
+
+            for i in range(n_bs_samples):
+                sample_crps = np.random.choice(crps_sub, num_exps, replace=True)
+                bs_crps.append(sample_crps.mean())
+
+            upper_ci.append(np.quantile(bs_crps, max_quant))
+            lower_ci.append(np.quantile(bs_crps, min_quant))
+
+        all_crps[phase] = crps
+        all_upper_ci[phase] = upper_ci
+        all_lower_ci[phase] = lower_ci
+
+    return all_crps, all_lower_ci, all_upper_ci
+
+
+def plot_crps_bootstrap(truth, preds, columns, output_path, species, model_name, n_bs_samples=1000, ci_level=0.95,
+                        only_stable=True, stable_thresh=1):
+    """
+    Plot Continuous Ranked Probability Score across validation experiments for ensemble
+    Args:
+        truth (pd.DataFrame): Modeled observations
+        preds (pd.DataFrame): Predictions
+        columns: Columns to plot CRPS of
+        output_path (str): Base path to save to
+        species (str): Species name (used for titling and file naming)
+        model_name (str): Model name (used for titleing and file naming)
+        n_bs_samples (int): Number of bootstrap resamples (defaults to 1000)
+        ci_level (float): Confidence level in decimal form (defaults to 0.95)
+        only_stable (bool): If only stable experiments should be used
+        stable_thresh (float): Magnitude to determine if experiments are stable (only used if only_stable=True)
+
+    Returns:
+    """
+    if only_stable:
+        stable_exps = get_stability(preds, stable_thresh)[0]
+        truth = truth[truth['id'].isin(stable_exps)]
+        preds = preds[preds['id'].isin(stable_exps)]
+
+    crps, lower_ci, upper_ci = crps_ens_bootstrap(truth, preds, columns, n_bs_samples, ci_level)
+    time = truth['Time [s]'].unique() / 60 / 60 / 24
+
+    fig, ax = plt.subplots(len(columns), 1, figsize=(22, 22), sharex=True)
+    fig.subplots_adjust(hspace=0, wspace=0)
+    fig.subplots_adjust(top=0.95)
+
+    for i, phase in enumerate(crps.keys()):
+        if phase == 'Precursor [ug/m3]':
+            ax[i].set_yscale('log')
+        colors = ['r', 'g', 'b']
+        ax[i].xaxis.set_tick_params(labelsize=16)
+        ax[i].plot(time, crps[phase], color=colors[i], lw=3, label=f'Mean {phase} CRPS')
+        ax[i].plot(time, lower_ci[phase], color='k', lw=1)
+        ax[i].plot(time, upper_ci[phase], color='k', lw=1)
+        ax[i].fill_between(time, lower_ci[phase], upper_ci[phase], alpha=0.2, color='grey')
+        ax[i].set_ylabel(phase, fontsize=16)
+        ax[i].legend(loc='upper right', prop={'size': 16})
+        if i == len(columns) - 1:
+            ax[i].set_xlabel('Time [Days]', fontsize=20)
+        fig.suptitle(
+            f'Bootstapped {int(ci_level * 100)}% Confidence Intervals of Ensembled CRPS - {species.title()}',
+            fontsize=24)
+        plt.savefig(join(output_path, f'plots/{species}_CRPS_{model_name}.png'), bbox_inches='tight')
+
+
+def plot_unstability(preds, columns, output_path, model_name, stability_thresh=1):
+    """
+    Plot unstable runs by timestep for each mass phase specified
+    Args:
+        preds (pd.DataFrame): Predictions
+        columns (list): Mass phases to be plotted
+        output_path (str): Base output path
+        model_name (str): Name of model plotted
+        stability_thresh (float): Magnitude of threshold to determine instability (> thresh or < -thresh)
+
+    Returns:
+    """
+
+    total_runs = int(len(preds) / preds['Time [s]'].nunique())
+    time = preds['Time [s]'].unique() / 60 / 60 / 24
+    colors = ['lightblue', 'red', 'green']
+    plt.figure(figsize=(24, 8))
+    plt.tick_params(axis='both', labelsize=18)
+
+    for i, column in enumerate(columns):
+        x = preds.groupby('Time [s]')[column].apply(
+            lambda x: x[(x > stability_thresh) | (x < -stability_thresh)].count())
+        sns.lineplot(time, x, color='k')
+        plt.fill_between(time, x, color=colors[i], label=column)
+
+    plt.legend(prop={'size': 16})
+    plt.xlabel('Simulation Days', fontsize=20)
+    plt.ylabel('Number Runaways', fontsize=20)
+    plt.title(f'Ensemble Counts of Runaway Errors ({total_runs} Total Runs)', fontsize=24)
+    plt.savefig(join(output_path, f'plots/unstable_{model_name}.png'), bbox_inches='tight')
