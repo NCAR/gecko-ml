@@ -9,8 +9,16 @@ import traceback
 import pandas as pd
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from sklearn.metrics import mean_squared_error, mean_absolute_error
-from aimlutils.echo.src.base_objective import *
-from aimlutils.echo.src.pruners import KerasPruningCallback
+
+try:
+    from aimlutils.echo.src.base_objective import *
+    from aimlutils.echo.src.pruners import KerasPruningCallback
+except ModuleNotFoundError:
+    from aimlutils.echo.hyper_opt.base_objective import *
+    from aimlutils.echo.hyper_opt.utils import KerasPruningCallback
+except:
+    raise OSError("aimlutils does not seem to be installed, or is not on your python path. Exiting.")
+    
 from geckoml.models import DenseNeuralNetwork
 from geckoml.data import *
 from geckoml.box import *
@@ -108,9 +116,15 @@ class Objective(BaseObjective):
         num_timesteps = in_train['Time [s]'].nunique()
 
         # Rescale training and validation / testing data
-        x_scaler = scalers[scaler_type]((conf['min_scale_range'], conf['max_scale_range']))
+        if scaler_type == "MinMaxScaler":
+            x_scaler = scalers[scaler_type]((conf['min_scale_range'], conf['max_scale_range']))
+        else:
+            x_scaler = scalers[scaler_type]()
         scaled_in_train = x_scaler.fit_transform(in_train.drop(['Time [s]', 'id'], axis=1))
         scaled_in_val = x_scaler.transform(in_val.drop(['Time [s]', 'id'], axis=1))
+        
+        print(scaler_type, np.amax(scaled_in_train), np.amin(scaled_in_train))
+        raise
 
         y_scaler = get_output_scaler(x_scaler, output_vars, scaler_type, data_range=(
             conf['min_scale_range'], conf['max_scale_range']))
@@ -231,12 +245,12 @@ class BoxValidationCallback(Callback):
 
 class CustomModel(DenseNeuralNetwork):
         
-    def fit(self, x, y, x_val, y_val, callbacks = [], rate = 1):
+    def fit(self, x, y, x_val, y_val, callbacks = [], rate = 1, scaler_type = "MinMaxScaler"):
         
         inputs = x.shape[1]
         outputs = [i.shape[-1] for i in y]
         
-        self.build_neural_network(inputs, outputs, rate = rate)
+        self.build_neural_network(inputs, outputs, rate=rate, scaler_type=scaler_type)
         
         history = self.model.fit(
             x, y,
@@ -249,7 +263,7 @@ class CustomModel(DenseNeuralNetwork):
         return history
     
     
-    def build_neural_network(self, inputs, outputs, rate = 1):
+    def build_neural_network(self, inputs, outputs, rate = 1, scaler_type = "MinMaxScaler"):
         """
         Create Keras neural network model and compile it.
 
@@ -273,6 +287,17 @@ class CustomModel(DenseNeuralNetwork):
         else:
             self.kernel_reg = None
 
+        # Override for using custom activiation layers (use linear as last, then apply the lambda layer)
+        use_custom_activation = False
+        if "lambda" in self.output_activation:
+            self.output_activation = "linear"
+            use_custom_activation = True
+            rate = float(self.output_activation.split(":")[-1])
+            if scaler_type == "MinMaxScaler":
+                custom_activation = CustomActivationExp(rate = rate)
+            else:
+                custom_activation = CustomActivationTanh(rate = rate)
+            
         for h in range(self.hidden_layers):
             nn_model = Dense(self.hidden_neurons, activation=self.activation,
                              kernel_regularizer=self.kernel_reg, name=f"dense_{h:02d}")(nn_model)
@@ -281,29 +306,41 @@ class CustomModel(DenseNeuralNetwork):
             if self.use_noise:
                 nn_model = GaussianNoise(self.noise_sd, name=f"ganoise_h_{h:02d}")(nn_model)
         nn_model_out = {}
-        
-        custom_activation = CustomActivation(rate = rate)
         for i in range(len(outputs)):
             nn_model_out[i] = Dense(outputs[i],
                              activation=self.output_activation, name=f"dense_out_{i:02d}")(nn_model)
-            nn_model_out[i] = Lambda(custom_activation.out)(nn_model_out[i])
+            if use_custom_activation:
+                nn_model_out[i] = Lambda(custom_activation.out)(nn_model_out[i])
          
         output_layers = [x for x in nn_model_out.values()]
         self.model = Model(nn_input, output_layers)
-        if self.optimizer == "adam":
-            self.optimizer_obj = Adam(lr=self.lr)#, beta_1=self.adam_beta_1, beta_2=self.adam_beta_2,
-                                      #epsilon=self.epsilon, decay=self.decay)
-        elif self.optimizer == "sgd":
-            self.optimizer_obj = SGD(lr=self.lr)#, momentum=self.sgd_momentum, decay=self.decay)
+#         if self.optimizer == "adam":
+#             self.optimizer_obj = Adam(lr=self.lr)#, beta_1=self.adam_beta_1, beta_2=self.adam_beta_2,
+#                                       #epsilon=self.epsilon, decay=self.decay)
+#         elif self.optimizer == "sgd":
+#             self.optimizer_obj = SGD(lr=self.lr)#, momentum=self.sgd_momentum, decay=self.decay)
 
         if self.loss == 'Xsigmoid':
-            self.model.compile(optimizer=self.optimizer_obj, loss=self.x_sigmoid, loss_weights=self.loss_weights)
+            self.model.compile(optimizer=self.optimizer, loss=self.x_sigmoid, loss_weights=self.loss_weights)
+        elif self.loss == 'Xtanh':
+            self.model.compile(optimizer=self.optimizer, loss=x_tanh, loss_weights=self.loss_weights)
         else:
-            self.model.compile(optimizer=self.optimizer_obj, loss=self.loss, loss_weights=self.loss_weights)
+            self.model.compile(optimizer=self.optimizer, loss=self.loss, loss_weights=self.loss_weights)
+            
 
-
-class CustomActivation:
+class CustomActivationExp:
     def __init__(self, rate = 1):
         self.rate = rate
     def out(self, x):
         return 1.0 * (1.0 - K.exp(-self.rate * K.abs(x)))
+    
+class CustomActivationTanh:
+    def __init__(self, rate = 1):
+        self.rate = rate
+    def out(self, x):
+        return 5.0 * K.tanh(self.rate * x)
+
+def x_tanh(y_actual, y_pred):
+    x = y_actual - y_pred
+    custom_loss = K.mean(x * K.tanh(x))
+    return custom_loss

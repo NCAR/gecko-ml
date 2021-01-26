@@ -42,24 +42,24 @@ optuna:
       settings:
         name: "hidden_neurons"
         low: 10
-        high: 1000
+        high: 20000
     dense_network:lr:
       type: "loguniform"
       settings:
         name: "lr"
         low: 0.00000001
-        high: 0.01
+        high: 0.1
     dense_network:l1_weight:
       type: "loguniform"
       settings:
         name: "l1_weight"
-        low: 1.0e-10
+        low: 1.0e-12
         high: 0.1
     dense_network:l2_weight:
       type: "loguniform"
       settings:
         name: "l2_weight"
-        low: 1.0e-10
+        low: 1.0e-12
         high: 0.1
     dense_network:batch_size:
       type: "int"
@@ -72,7 +72,7 @@ optuna:
       settings: 
         name: "dropout_alpha"
         low: 0.0
-        high: 0.5
+        high: 0.9
     dense_network:activation:
       type: "categorical"
       settings:
@@ -82,7 +82,25 @@ optuna:
       type: "categorical"
       settings:
         name: "loss"
-        choices: [["mae"], ["mse"], ["log_cosh"], ["mean_squared_logarithmic_error"], ["poisson"], ["huber"]]
+        choices: [["mae"], ["mse"], ["log_cosh"], ["mean_squared_logarithmic_error"], ["poisson"], ["huber"], ["Xsigmoid"], ["Xtanh"]]
+    dense_network:optimizer:
+      type: "categorical"
+      settings: 
+        name: "optimizer"
+        choices: ["adam", "sgd", "RMSprop", "Adadelta", "Adagrad", "Adamax", "Nadam"]
+    scaler_type:
+      type: "categorical"
+      settings:
+        name: "scaler_type"
+        choices: ["MinMaxScaler", "StandardScaler"]
+    dense_network:output_activation:
+      type: "categorical"
+      settings:
+        name: "output_activation"
+        choices: ["linear", "lambda:100", "lambda:10", "lambda:1", "lambda:0.1", "lambda:0.01"]
+        
+        
+        
 #     dense_network:custom_activation_decay_rate:
 #       type: "loguniform"
 #       settings:
