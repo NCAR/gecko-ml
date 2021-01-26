@@ -65,10 +65,10 @@ def custom_updates(trial, conf):
 
 class Objective(BaseObjective):
     
-    def __init__(self, study, config, metric="box_mae", device="cpu"):
+    def __init__(self, config, metric="box_mae", device="cpu"):
         
         # Initialize the base class
-        BaseObjective.__init__(self, study, config, metric, device)
+        BaseObjective.__init__(self, config, metric, device)
 
 
     def train(self, trial, conf):
@@ -122,9 +122,6 @@ class Objective(BaseObjective):
             x_scaler = scalers[scaler_type]()
         scaled_in_train = x_scaler.fit_transform(in_train.drop(['Time [s]', 'id'], axis=1))
         scaled_in_val = x_scaler.transform(in_val.drop(['Time [s]', 'id'], axis=1))
-        
-        print(scaler_type, np.amax(scaled_in_train), np.amin(scaled_in_train))
-        raise
 
         y_scaler = get_output_scaler(x_scaler, output_vars, scaler_type, data_range=(
             conf['min_scale_range'], conf['max_scale_range']))
@@ -290,9 +287,9 @@ class CustomModel(DenseNeuralNetwork):
         # Override for using custom activiation layers (use linear as last, then apply the lambda layer)
         use_custom_activation = False
         if "lambda" in self.output_activation:
+            rate = float(self.output_activation.split(":")[-1])
             self.output_activation = "linear"
             use_custom_activation = True
-            rate = float(self.output_activation.split(":")[-1])
             if scaler_type == "MinMaxScaler":
                 custom_activation = CustomActivationExp(rate = rate)
             else:
@@ -320,9 +317,9 @@ class CustomModel(DenseNeuralNetwork):
 #         elif self.optimizer == "sgd":
 #             self.optimizer_obj = SGD(lr=self.lr)#, momentum=self.sgd_momentum, decay=self.decay)
 
-        if self.loss == 'Xsigmoid':
+        if self.loss == ['Xsigmoid']:
             self.model.compile(optimizer=self.optimizer, loss=self.x_sigmoid, loss_weights=self.loss_weights)
-        elif self.loss == 'Xtanh':
+        elif self.loss == ['Xtanh']:
             self.model.compile(optimizer=self.optimizer, loss=x_tanh, loss_weights=self.loss_weights)
         else:
             self.model.compile(optimizer=self.optimizer, loss=self.loss, loss_weights=self.loss_weights)

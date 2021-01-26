@@ -48,7 +48,7 @@ dense_network:
   batch_size: 8192
   use_noise: False
   noise_sd: 0.01
-  epochs: 300
+  epochs: 500
   use_dropout: True
   dropout_alpha: 0.1
   kernel_reg: 'l1_l2'
@@ -59,9 +59,8 @@ dense_network:
 #   adam_beta_2: 0.999
 #   epsilon: 0.00001
 #   decay: 0
-  verbose: 1
+  verbose: True
   classifier: False
-  #custom_activation_decay_rate: 1.0
 callbacks:
 #   ModelCheckpoint:
 #     monitor: "val_loss"

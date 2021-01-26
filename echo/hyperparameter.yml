@@ -31,12 +31,12 @@ optuna:
     type: "TPESampler"
     n_startup_trials: 100
   parameters:
-    dense_network:hidden_layers:
-      type: "int"
-      settings:
-        name: "hidden_layers"
-        low: 1
-        high: 10
+#     dense_network:hidden_layers:
+#       type: "int"
+#       settings:
+#         name: "hidden_layers"
+#         low: 1
+#         high: 2
     dense_network:hidden_neurons:
       type: "int"
       settings:
@@ -82,7 +82,7 @@ optuna:
       type: "categorical"
       settings:
         name: "loss"
-        choices: [["mae"], ["mse"], ["log_cosh"], ["mean_squared_logarithmic_error"], ["poisson"], ["huber"], ["Xsigmoid"], ["Xtanh"]]
+        choices: [["Xsigmoid"], ["Xtanh"], ["mae"], ["mse"], ["log_cosh"], ["mean_squared_logarithmic_error"], ["poisson"], ["huber"]]
     dense_network:optimizer:
       type: "categorical"
       settings: 
@@ -99,6 +99,7 @@ optuna:
         name: "output_activation"
         choices: ["linear", "lambda:100", "lambda:10", "lambda:1", "lambda:0.1", "lambda:0.01"]
         
+#[["mae"], ["mse"], ["log_cosh"], ["mean_squared_logarithmic_error"], ["poisson"], ["huber"], ["Xsigmoid"], ["Xtanh"]]
         
         
 #     dense_network:custom_activation_decay_rate:
