@@ -16,7 +16,7 @@ from geckoml.data import combine_data, split_data, reshape_data, partition_y_out
 
 def test_boxmodel():
 
-    config_file= "../config/dodecane.yml"
+    config_file= "/glade/work/$USER/gecko-ml/config/dodecane.yml"
     with open(config_file) as fid:
         config = yaml.load(fid)
     
@@ -32,18 +32,18 @@ def test_boxmodel():
     output_path = config['output_path']
     scaler_type = config['scaler_type']
     seq_length = config['seq_length']
-    train_start_exp: config['train_start_exp']
-    train_end_exp: config['train_end_exp']
-    val_start_exp: config['val_start_exp']
-    val_end_exp: config['val_end_exp']
-    test_start_exp:config['test_start_exp']
-    test_end_exp: config['test_end_exp']
-    box_val_exps: config['box_val_exps']
+    train_start_exp = config['train_start_exp']
+    train_end_exp = config['train_end_exp']
+    val_start_exp = config['val_start_exp']
+    val_end_exp = config['val_end_exp']
+    test_start_exp = config['test_start_exp']
+    test_end_exp = config['test_end_exp']
+    box_val_exps = config['box_val_exps']
 
     # Unit Test
 
-    in_train = pd.read_csv("in_train_test.csv")
-    out_train = pd.read_csv("out_train_test.csv")
+    in_train = pd.read_csv("/glade/work/$USER/gecko-ml/test_data/in_train_test.csv")
+    out_train = pd.read_csv("/glade/work/$USER/gecko-ml/test_data/out_train_test.csv")
 
     # Rescale training and validation / testing data
     x_scaler = MinMaxScaler()
@@ -64,10 +64,10 @@ def test_boxmodel():
     result = model.model.fit(scaled_in_train, scaled_out_train)
 
     # Save model and scaler
-    model.model.save("test.h5")
+    model.model.save("/glade/work/$USER/gecko-ml/test_data/test.h5")
 
     mod = GeckoBoxEmulator(
-        neural_net_path = "test.h5", 
+        neural_net_path = "/glade/work/$USER/gecko-ml/test_data/test.h5", 
         output_scaler=y_scaler,
         input_cols=input_vars, 
         output_cols=output_vars
@@ -84,7 +84,8 @@ def test_boxmodel():
         time_series,
         exp
     )
-    if os.path.isfile("test.h5"):
-        os.remove("test.h5")
+    if os.path.isfile("/glade/work/$USER/gecko-ml/test_data/test.h5"):
+        os.remove("/glade/work/$USER/gecko-ml/test_data/test.h5")
         
     assert isinstance(results, pd.DataFrame)
+    assert results.shape[0] == 1439
