@@ -2,7 +2,7 @@ log:
   save_path: "test/log.txt"
 
 slurm:
-  jobs: 20
+  jobs: 2
   kernel: "ncar_pylib /glade/work/schreck/py37"
   bash: ["module load ncarenv/1.3 gnu/8.3.0 openmpi/3.1.4 python/3.7.5 cuda/10.1"]
   batch:
@@ -11,8 +11,8 @@ slurm:
     mem: "64G"
     x: "casper36"
     n: 8
-    t: "12:00:00"
-    J: "gecko_opt"
+    t: "01:00:00"
+    J: "gecko_echo" #hehe
     o: "hyper_opt.out"
     e: "hyper_opt.err"
     
@@ -21,10 +21,10 @@ optuna:
   storage: "sqlite:///test/gecko.db"
   #storage: "mysql://schreck:l3tm31n@thunder.ucar.edu/optuna"
   reload: 0
-  objective: "objective.py"
+  objective: "/glade/work/cbecker/gecko-ml/objective.py"
   direction: "minimize"
   metric: "box_mae"
-  n_trials: 999
+  n_trials: 10
   gpu: True
   save_path: 'test'
   sampler:
@@ -41,8 +41,8 @@ optuna:
       type: "int"
       settings:
         name: "hidden_neurons"
-        low: 10
-        high: 20000
+        low: 50
+        high: 1000
     dense_network:lr:
       type: "loguniform"
       settings:
@@ -61,44 +61,44 @@ optuna:
         name: "l2_weight"
         low: 1.0e-12
         high: 0.1
-    dense_network:batch_size:
-      type: "int"
-      settings: 
-        name: "batch_size"
-        low: 128
-        high: 16384
-    dense_network:dropout_alpha:
-      type: "float"
-      settings: 
-        name: "dropout_alpha"
-        low: 0.0
-        high: 0.9
-    dense_network:activation:
-      type: "categorical"
-      settings:
-        name: "activation"
-        choices: ["relu", "leaky", "selu", "elu", "prelu"]
-    dense_network:loss:
-      type: "categorical"
-      settings:
-        name: "loss"
-        choices: [["Xsigmoid"], ["Xtanh"], ["mae"], ["mse"], ["log_cosh"], ["mean_squared_logarithmic_error"], ["poisson"], ["huber"]]
-    dense_network:optimizer:
-      type: "categorical"
-      settings: 
-        name: "optimizer"
-        choices: ["adam", "sgd", "RMSprop", "Adadelta", "Adagrad", "Adamax", "Nadam"]
-    scaler_type:
-      type: "categorical"
-      settings:
-        name: "scaler_type"
-        choices: ["MinMaxScaler", "StandardScaler"]
-    dense_network:output_activation:
-      type: "categorical"
-      settings:
-        name: "output_activation"
-        choices: ["linear", "lambda:100", "lambda:10", "lambda:1", "lambda:0.1", "lambda:0.01"]
-        
+#    dense_network:batch_size:
+#      type: "int"
+#      settings:
+#        name: "batch_size"
+#        low: 128
+#        high: 16384
+#    dense_network:dropout_alpha:
+#      type: "float"
+#      settings:
+#        name: "dropout_alpha"
+#        low: 0.0
+#        high: 0.9
+#    dense_network:activation:
+#      type: "categorical"
+#      settings:
+#        name: "activation"
+#        choices: ["relu", "leaky", "selu", "elu", "prelu"]
+#    dense_network:loss:
+#      type: "categorical"
+#      settings:
+#        name: "loss"
+#        choices: [["Xsigmoid"], ["Xtanh"], ["mae"], ["mse"], ["log_cosh"], ["mean_squared_logarithmic_error"], ["poisson"], ["huber"]]
+#    dense_network:optimizer:
+#      type: "categorical"
+#      settings:
+#        name: "optimizer"
+#        choices: ["adam", "sgd", "RMSprop", "Adadelta", "Adagrad", "Adamax", "Nadam"]
+#    scaler_type:
+#      type: "categorical"
+#      settings:
+#        name: "scaler_type"
+#        choices: ["MinMaxScaler", "StandardScaler"]
+#    dense_network:output_activation:
+#      type: "categorical"
+#      settings:
+#        name: "output_activation"
+#        choices: ["linear", "lambda:100", "lambda:10", "lambda:1", "lambda:0.1", "lambda:0.01"]
+#
 #[["mae"], ["mse"], ["log_cosh"], ["mean_squared_logarithmic_error"], ["poisson"], ["huber"], ["Xsigmoid"], ["Xtanh"]]
         
         
