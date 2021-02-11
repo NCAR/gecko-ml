@@ -10,6 +10,8 @@ requirements = ["numpy",
                 "tqdm",
                 "netcdf4",
                 "matplotlib",
+                "dask",
+                "distributed",
                 "scikit-learn"]
 
 setup(name="gecko-ml",
