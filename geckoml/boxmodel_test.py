@@ -14,9 +14,13 @@ from tensorflow.python.framework.ops import disable_eager_execution
 from geckoml.data import combine_data, split_data, reshape_data, partition_y_output, get_output_scaler, \
     reconstruct_preds, save_metrics
 
+
+np.random.seed(9)
+
+#Test box model
 def test_boxmodel():
 
-    config_file= "/glade/work/$USER/gecko-ml/config/dodecane.yml"
+    config_file= "/glade/work/keelyl/gecko-ml/config/dodecane.yml"
     with open(config_file) as fid:
         config = yaml.load(fid)
     
@@ -42,19 +46,24 @@ def test_boxmodel():
 
     # Unit Test
 
-    in_train = pd.read_csv("/glade/work/$USER/gecko-ml/test_data/in_train_test.csv")
-    out_train = pd.read_csv("/glade/work/$USER/gecko-ml/test_data/out_train_test.csv")
+    in_train = pd.read_csv("/glade/work/keelyl/gecko-ml/test_data/in_train_test.csv")
+    out_train = pd.read_csv("/glade/work/keelyl/gecko-ml/test_data/out_train_test.csv")
 
     # Rescale training and validation / testing data
     x_scaler = MinMaxScaler()
     scaled_in_train = x_scaler.fit_transform(in_train.drop(['Time [s]', 'id'], axis=1))
-
+    
     # Load transform scaler
     y_scaler = MinMaxScaler()
 
     # Transform the data
     scaled_out_train = y_scaler.fit_transform(out_train.drop(['Time [s]', 'id'], axis=1))
 
+    assert (0 <= scaled_in_train.all() <= 1)
+    assert (0 <= scaled_out_train.all() <= 1)
+    assert len(scaled_in_train) == 1439
+    assert len(scaled_out_train) == 1439 
+    
     # Grab the time-steps
     num_timesteps = in_train['Time [s]'].nunique()
 
@@ -64,10 +73,10 @@ def test_boxmodel():
     result = model.model.fit(scaled_in_train, scaled_out_train)
 
     # Save model and scaler
-    model.model.save("/glade/work/$USER/gecko-ml/test_data/test.h5")
+    model.model.save("/glade/work/keelyl/gecko-ml/test_data/test.h5")
 
     mod = GeckoBoxEmulator(
-        neural_net_path = "/glade/work/$USER/gecko-ml/test_data/test.h5", 
+        neural_net_path = "/glade/work/keelyl/gecko-ml/test_data/test.h5", 
         output_scaler=y_scaler,
         input_cols=input_vars, 
         output_cols=output_vars
@@ -84,8 +93,8 @@ def test_boxmodel():
         time_series,
         exp
     )
-    if os.path.isfile("/glade/work/$USER/gecko-ml/test_data/test.h5"):
-        os.remove("/glade/work/$USER/gecko-ml/test_data/test.h5")
+    if os.path.isfile("/glade/work/keelyl/gecko-ml/test_data/test.h5"):
+        os.remove("/glade/work/keelyl/gecko-ml/test_data/test.h5")
         
     assert isinstance(results, pd.DataFrame)
     assert results.shape[0] == 1439
