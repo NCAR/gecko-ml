@@ -344,6 +344,9 @@ def crps_ens_bootstrap(truth, preds, columns, n_bs_samples=1000, ci_level=0.95):
     Returns:
         (Dicts): Mean CRPS, Lower CRPS CI, Upper CRPS CI
     """
+    truth = truth.set_index(['member', 'id'])
+    preds = preds.set_index(['member', 'id'])
+    
     num_exps = truth.index.levels[1].nunique()
     time_steps = truth['Time [s]'].unique()
     min_quant = (1 - ci_level) / 2
@@ -354,7 +357,7 @@ def crps_ens_bootstrap(truth, preds, columns, n_bs_samples=1000, ci_level=0.95):
 
         crps, upper_ci, lower_ci = [], [], []
 
-        for j, time_step in enumerate(time_steps):
+        for time_step in time_steps:
 
             bs_crps = []
 
@@ -363,7 +366,7 @@ def crps_ens_bootstrap(truth, preds, columns, n_bs_samples=1000, ci_level=0.95):
             crps_sub = ps.crps_ensemble(t_sub, p_sub)
             crps.append(crps_sub.mean())
 
-            for i in range(n_bs_samples):
+            for _ in range(n_bs_samples):
                 sample_crps = np.random.choice(crps_sub, num_exps, replace=True)
                 bs_crps.append(sample_crps.mean())
 
