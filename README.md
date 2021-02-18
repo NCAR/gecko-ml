@@ -55,8 +55,11 @@ The goal of this project is to train the machine-learning emulator using the “
 ```bash
 git clone https://github.com/NCAR/gecko-ml.git
 cd gecko-ml
+conda env create --file environment.yml
 pip install .
+conda activate gecko
 ```
+
 ## Running 
 
 Training and running the model in a forward-walking scenario are split into seperate procedures. If you're on Casper, you can run the following submit scripts.
