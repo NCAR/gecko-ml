@@ -1,0 +1,32 @@
+
+name: gecko
+channels:
+  - conda-forge
+dependencies:
+  - optuna
+  - python=3.8
+  - numpy
+  - seaborn
+  - scipy
+  - properscoring
+  - matplotlib
+  - xarray
+  - netcdf4
+  - pyyaml
+  - tqdm
+  - dask
+  - pandas
+  - scikit-learn
+  - pytest
+  - jupyter
+  - jupyterlab
+  - jupyter_server
+  - dask
+  - distributed
+  - pip
+  - s3fs
+  - pyarrow
+  - pip:
+    - tensorflow
+    - torch
+    - keras-self-attention
