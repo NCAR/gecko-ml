@@ -1,0 +1,18 @@
+language: python
+
+before_install:
+  - wget -q https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+  - sh Miniconda3-latest-Linux-x86_64.sh -b -p /home/travis/miniconda
+  - export PATH=/home/travis/miniconda/bin:$PATH
+  - conda config --add channels conda-forge
+  - conda config --set channel_priority strict
+
+install:
+  - conda env create -f environment.yml
+  - source activate gecko
+  - pip install .
+script:
+  - python applications/train_gecko_emulators.py -c config/ci_config.yml
+# - python applications/run_gecko_emulators.py -c config/ci_config.yml
+notifications:
+  email: true
