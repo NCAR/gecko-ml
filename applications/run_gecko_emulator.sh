@@ -11,5 +11,7 @@
 #SBATCH -e ./run.txt
 module load cuda/11 cudnn
 conda activate gecko
+echo $PATH
+which python
 cd /glade/work/$USER/gecko-ml/applications/
 python run_gecko_emulators.py -c ../config/dodecane_agg.yml >& ./run.txt
