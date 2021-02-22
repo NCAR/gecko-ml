@@ -56,7 +56,6 @@ The goal of this project is to train the machine-learning emulator using the “
 git clone https://github.com/NCAR/gecko-ml.git
 cd gecko-ml
 conda env create --file environment.yml
-pip install .
 conda activate gecko
 ```
 
