@@ -13,14 +13,17 @@ from tensorflow.keras.models import load_model
 from tensorflow.python.framework.ops import disable_eager_execution
 from geckoml.data import combine_data, split_data, reshape_data, partition_y_output, get_output_scaler, \
     reconstruct_preds, save_metrics
-
+import os.path
+from os import path
 
 np.random.seed(9)
+
+#Call from gecko_ml
 
 #Test box model
 def test_boxmodel():
 
-    config_file= "/glade/work/keelyl/gecko-ml/config/dodecane.yml"
+    config_file= "config/dodecane.yml"
     with open(config_file) as fid:
         config = yaml.load(fid)
     
@@ -44,10 +47,13 @@ def test_boxmodel():
     test_end_exp = config['test_end_exp']
     box_val_exps = config['box_val_exps']
 
+    assert len(input_vars) == 37
+    assert len(output_vars) == 31
+    
     # Unit Test
 
-    in_train = pd.read_csv("/glade/work/keelyl/gecko-ml/test_data/in_train_test.csv")
-    out_train = pd.read_csv("/glade/work/keelyl/gecko-ml/test_data/out_train_test.csv")
+    in_train = pd.read_csv("test_data/in_train_test.csv")
+    out_train = pd.read_csv("test_data/out_train_test.csv")
 
     # Rescale training and validation / testing data
     x_scaler = MinMaxScaler()
@@ -66,22 +72,28 @@ def test_boxmodel():
     
     # Grab the time-steps
     num_timesteps = in_train['Time [s]'].nunique()
-
+    
+    assert num_timesteps == 1439
+    
     # Train for 1 epoch on fake data 
     model = DenseNeuralNetwork(loss_weights={})
     model.build_neural_network(scaled_in_train.shape[1],[scaled_out_train.shape[1]])
     result = model.model.fit(scaled_in_train, scaled_out_train)
 
     # Save model and scaler
-    model.model.save("/glade/work/keelyl/gecko-ml/test_data/test.h5")
-
+    model.model.save("test_data/test.h5")
+    test_path = "test_data/test.h5"
+    
+    assert os.path.exists(test_path)
+    
     mod = GeckoBoxEmulator(
-        neural_net_path = "/glade/work/keelyl/gecko-ml/test_data/test.h5", 
+        neural_net_path = test_path, 
         output_scaler=y_scaler,
         input_cols=input_vars, 
         output_cols=output_vars
     )
 
+    
     starting_conds = scaled_in_train[0].reshape((1, scaled_in_train[0].shape[0]))
     temps = in_train['temperature (K)']
     time_series = in_train['Time [s]']
@@ -93,8 +105,14 @@ def test_boxmodel():
         time_series,
         exp
     )
-    if os.path.isfile("/glade/work/keelyl/gecko-ml/test_data/test.h5"):
-        os.remove("/glade/work/keelyl/gecko-ml/test_data/test.h5")
-        
-    assert isinstance(results, pd.DataFrame)
+    
+    assert len(time_series) == 1439
+    assert starting_conds.shape == (1, 35)
     assert results.shape[0] == 1439
+    assert isinstance(results, pd.DataFrame)
+
+    if os.path.isfile("test_data/test.h5"):
+        os.remove("test_data/test.h5")
+        
+    assert not os.path.exists(test_path)
+   
