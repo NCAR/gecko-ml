@@ -10,5 +10,7 @@
 #SBATCH -e ./train.txt
 module load cuda/11 cudnn
 conda activate gecko
+echo $PATH
+which python
 cd /glade/work/$USER/gecko-ml/applications/
 python train_gecko_emulators.py -c ../config/dodecane_agg.yml >& ./train.txt
