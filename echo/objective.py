@@ -73,7 +73,7 @@ class Objective(BaseObjective):
 
     def train(self, trial, conf):
 
-        conf = custom_updates(trial, conf)
+        #conf = custom_updates(trial, conf)
 
         # Set up some globals
         tf.random.set_seed(5999)
@@ -144,25 +144,19 @@ class Objective(BaseObjective):
             env_array.append(np.expand_dims(env_conds, axis=0))
         in_array = np.concatenate(in_array) # (num_experiments, num_timesteps, outputs)
         env_array = np.concatenate(env_array)
-            
-        # Load callbacks        
-        box_callback = BoxValidationCallback(self.metric, exps, num_timesteps, in_array, 
-                                             env_array, y_scaler, output_cols, out_val)
-        
-        pruning_callback = KerasPruningCallback(trial, self.metric, interval = 1)
-        callbacks = [box_callback, pruning_callback]
-        callbacks += get_callbacks(conf["callbacks"]) if "callbacks" in conf else []
-
+                    
         # Load the model
-        mod = CustomModel(**conf["dense_network"])
+        mod = DenseNeuralNetwork(**conf["dense_network"])
         
         # Train the model 
-        rate = 1.0 #conf["dense_network"]["custom_activation_decay_rate"]
-        history = mod.fit(scaled_in_train, y, scaled_in_val, y_val, callbacks, rate = rate)
+        history = mod.fit(scaled_in_train, y)
+        
+        # Compute the box mae
+        box_mae = box_validate(mod, exps, num_timesteps, in_array, env_array, y_scaler, output_cols, out_val)
             
-        # Return the best box mae from the training history
+        # Return box_mae to optuna
         results = {
-            self.metric: history.history[self.metric][box_callback.best_epoch]
+            "box_mae": box_mae
         }
 
         return results
@@ -196,148 +190,3 @@ def box_validate(mod, exps, num_timesteps, in_array, env_array, y_scaler, output
     box_mae = mean_absolute_error(preds.iloc[:, 2:-1], truth.iloc[:, 2:-1])
     
     return box_mae
-
-        
-class BoxValidationCallback(Callback):
-    
-    def __init__(self, metric, exps, num_timesteps, in_array, env_array, y_scaler, output_cols, out_val):
-        
-        super(BoxValidationCallback, self).__init__()
-        
-        self.metric = metric
-        self.exps = exps
-        self.num_timesteps = num_timesteps 
-        self.in_array = in_array
-        self.env_array = env_array 
-        self.y_scaler = y_scaler 
-        self.output_cols = output_cols 
-        self.out_val = out_val
-
-    def on_train_begin(self, logs={}):
-        logs = logs or {}
-        self.best = 1e10
-        self.best_epoch = 0
-        self.box_loss = []
-
-    def on_epoch_end(self, epoch, logs={}):
-        logs = logs or {}
-        box_loss = box_validate(
-            self.model, 
-            self.exps, 
-            self.num_timesteps, 
-            self.in_array, 
-            self.env_array, 
-            self.y_scaler, 
-            self.output_cols, 
-            self.out_val
-        )
-        self.box_loss.append(box_loss)
-        logs[self.metric] = box_loss
-        current = logs.get(self.metric)
-        
-        if np.less(self.best, current):
-            self.best = box_loss
-            self.best_epoch = epoch
-            
-
-class CustomModel(DenseNeuralNetwork):
-        
-    def fit(self, x, y, x_val, y_val, callbacks = [], rate = 1, scaler_type = "MinMaxScaler"):
-        
-        inputs = x.shape[1]
-        outputs = [i.shape[-1] for i in y]
-        
-        self.build_neural_network(inputs, outputs, rate=rate, scaler_type=scaler_type)
-        
-        history = self.model.fit(
-            x, y,
-            validation_data=(x_val, y_val),
-            batch_size=self.batch_size,
-            epochs=self.epochs, 
-            callbacks=callbacks,
-            verbose=self.verbose)
-        
-        return history
-    
-    
-    def build_neural_network(self, inputs, outputs, rate = 1, scaler_type = "MinMaxScaler"):
-        """
-        Create Keras neural network model and compile it.
-
-        Args:
-            inputs (int): Number of input predictor variables
-            outputs (int): Number of output predictor variables
-        """
-        nn_input = Input(shape=(inputs,), name="input")
-        nn_model = nn_input
-        if self.activation == 'leaky':
-            self.activation = LeakyReLU()
-        if self.activation == 'prelu':
-            self.activation = PReLU()
-
-        if self.kernel_reg == 'l1':
-            self.kernel_reg = l1(self.l1_weight)
-        elif self.kernel_reg == 'l2':
-            self.kernel_reg = l2(self.l2_weight)
-        elif self.kernel_reg == 'l1_l2':
-            self.kernel_reg = l1_l2(self.l1_weight, self.l2_weight)
-        else:
-            self.kernel_reg = None
-
-        # Override for using custom activiation layers (use linear as last, then apply the lambda layer)
-        use_custom_activation = False
-        if "lambda" in self.output_activation:
-            rate = float(self.output_activation.split(":")[-1])
-            self.output_activation = "linear"
-            use_custom_activation = True
-            if scaler_type == "MinMaxScaler":
-                custom_activation = CustomActivationExp(rate = rate)
-            else:
-                custom_activation = CustomActivationTanh(rate = rate)
-            
-        for h in range(self.hidden_layers):
-            nn_model = Dense(self.hidden_neurons, activation=self.activation,
-                             kernel_regularizer=self.kernel_reg, name=f"dense_{h:02d}")(nn_model)
-            if self.use_dropout:
-                nn_model = Dropout(self.dropout_alpha, name=f"dropout_h_{h:02d}")(nn_model)
-            if self.use_noise:
-                nn_model = GaussianNoise(self.noise_sd, name=f"ganoise_h_{h:02d}")(nn_model)
-        nn_model_out = {}
-        for i in range(len(outputs)):
-            nn_model_out[i] = Dense(outputs[i],
-                             activation=self.output_activation, name=f"dense_out_{i:02d}")(nn_model)
-            if use_custom_activation:
-                nn_model_out[i] = Lambda(custom_activation.out)(nn_model_out[i])
-         
-        output_layers = [x for x in nn_model_out.values()]
-        self.model = Model(nn_input, output_layers)
-#         if self.optimizer == "adam":
-#             self.optimizer_obj = Adam(lr=self.lr)#, beta_1=self.adam_beta_1, beta_2=self.adam_beta_2,
-#                                       #epsilon=self.epsilon, decay=self.decay)
-#         elif self.optimizer == "sgd":
-#             self.optimizer_obj = SGD(lr=self.lr)#, momentum=self.sgd_momentum, decay=self.decay)
-
-        if self.loss == ['Xsigmoid']:
-            self.model.compile(optimizer=self.optimizer, loss=self.x_sigmoid, loss_weights=self.loss_weights)
-        elif self.loss == ['Xtanh']:
-            self.model.compile(optimizer=self.optimizer, loss=x_tanh, loss_weights=self.loss_weights)
-        else:
-            self.model.compile(optimizer=self.optimizer, loss=self.loss, loss_weights=self.loss_weights)
-            
-
-class CustomActivationExp:
-    def __init__(self, rate = 1):
-        self.rate = rate
-    def out(self, x):
-        return 1.0 * (1.0 - K.exp(-self.rate * K.abs(x)))
-    
-class CustomActivationTanh:
-    def __init__(self, rate = 1):
-        self.rate = rate
-    def out(self, x):
-        return 5.0 * K.tanh(self.rate * x)
-
-def x_tanh(y_actual, y_pred):
-    x = y_actual - y_pred
-    custom_loss = K.mean(x * K.tanh(x))
-    return custom_loss
