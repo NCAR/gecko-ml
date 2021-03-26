@@ -108,10 +108,10 @@ class Objective(BaseObjective):
         #    test_start=conf['test_start_exp'],
         #    test_end=conf['test_end_exp'])
 
-        in_train = pd.read_csv('/glade/scratch/cbecker/gecko_data/apinO3_train_in_agg.csv')
-        out_train = pd.read_csv('/glade/scratch/cbecker/gecko_data/apinO3_train_out_agg.csv')
-        in_val = pd.read_csv('/glade/scratch/cbecker/gecko_data/apinO3_val_in_agg.csv')
-        out_val = pd.read_csv('/glade/scratch/cbecker/gecko_data/apinO3_val_out_agg.csv')
+        in_train = pd.read_csv(f'/glade/scratch/cbecker/gecko_data/{species}_train_in_agg.csv')
+        out_train = pd.read_csv(f'/glade/scratch/cbecker/gecko_data/{species}_train_out_agg.csv')
+        in_val = pd.read_csv(f'/glade/scratch/cbecker/gecko_data/{species}_val_in_agg.csv')
+        out_val = pd.read_csv(f'/glade/scratch/cbecker/gecko_data/{species}_val_out_agg.csv')
 
         num_timesteps = in_train['Time [s]'].nunique()
 
@@ -171,7 +171,9 @@ def box_validate(mod, exps, num_timesteps, in_array, env_array, y_scaler, output
 
     # use the first prediction to get the next, and so on for num_timesteps
     for i in range(1, num_timesteps):
-        new_input = np.block([pred, env_array])
+        temperature = in_array[:, i, 3:4]
+        static_env = env_array[:, -5:]
+        new_input = np.block([pred, temperature, static_env])
         pred = mod.predict(new_input)
         pred_array[:, i, :] = pred
 
