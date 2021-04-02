@@ -175,7 +175,7 @@ def box_validate(mod, exps, num_timesteps, in_array, env_array, y_scaler, output
         temperature = in_array[:, i, 3:4]
         sza = in_array[:, i, 4:5]
         pea_o3 = env_array[:, -4:-2]
-        nox = in_array[:, 7:8]
+        nox = in_array[:, i, 7:8]
         oh = env_array[:, -1:]
         new_input = np.block([pred, temperature, sza, pea_o3, nox, oh])
         pred = mod.predict(new_input)
