@@ -1,17 +1,12 @@
 #!/bin/bash -l
-#SBATCH --job-name=gecko-ml
-#SBATCH --account=NAML0001
-#SBATCH --time=00:50:00
-#SBATCH --partition=dav
-#SBATCH --nodes=2
-#SBATCH --ntasks=100
-#SBATCH --ntasks-per-node=50
-#SBATCH --mem=256G
-#SBATCH -o ./run.txt
-#SBATCH -e ./run.txt
+#PBS -N gecko-ml
+#PBS -A NAML0001
+#PBS -l walltime=00:30:00
+#PBS -q casper
+#PBS -l select=1:ncpus=16:mpiprocs=16:mem=128GB
+#PBS -o ./run.txt
+#PBS -e ./run.txt
 module load cuda/11 cudnn
 conda activate gecko
-echo $PATH
-which python
 cd /glade/work/$USER/gecko-ml/applications/
-python run_gecko_emulators.py -c ../config/dodecane_agg.yml >& ./run.txt
+python run_gecko_emulators.py -c ../config/apin_O3_agg.yml >& ./run.txt
