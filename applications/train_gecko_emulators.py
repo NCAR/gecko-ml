@@ -124,6 +124,7 @@ def main():
 
     joblib.dump(x_scaler, join(output_path, 'scalers', f'{species}_x.scaler'))
     joblib.dump(y_scaler, join(output_path, 'scalers', f'{species}_y.scaler'))
+    in_train.to_parquet(join(output_path, 'validation_data', f'{species}_in_train.parquet'))
     in_val.to_parquet(join(output_path, 'validation_data', f'{species}_in_val.parquet'))
     out_val.to_parquet(join(output_path, 'validation_data', f'{species}_out_val.parquet'))
 
