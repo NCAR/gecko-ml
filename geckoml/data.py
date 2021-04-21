@@ -168,7 +168,7 @@ def combine_data(dir_path, summary_file, aggregate_bins, bin_prefix,
     
     file_list = glob.glob('{}ML2019_{}_ML2019_Exp*'.format(dir_path, species))
     sorted_filelist = sorted(file_list, key=lambda x:list(map(int, re.findall("_Exp(\d+)*", x))))
-    
+
     summary = pd.read_csv(join(dir_path, summary_file), skiprows=3)
     summary.columns = [x.strip() for x in summary.columns]
     
@@ -212,6 +212,26 @@ def get_output_scaler(scaler_obj, output_vars, scaler_type='MinMaxScaler', data_
         setattr(scaler, 'mean_', scaler_obj.mean_[0:num_features])
 
     return scaler
+
+
+def save_scaler_csv(scaler_obj, input_columns, output_path, species, scaler_type='StandardScaler'):
+    """
+    Save the scaler information to csv so that it can be read later.
+    Args:
+        scaler_obj: Scikit-learn StandardScaler object
+        input_columns: List of scaled columns
+        output_path: Path to dave file to
+        scaler_type: Type of scaler object. Supports 'MinMaxScaler' and 'StandardScaler'
+    Returns:
+    """
+    if scaler_type == 'StandardScaler':
+        input_scaler_df = pd.DataFrame({"mean": scaler_obj.mean_, "scale": scaler_obj.scale_},
+                                       index=input_columns)
+    elif scaler_type == 'MinMaxScaler':
+        input_scaler_df = pd.DataFrame({"min": scaler_obj.min_, "scale": scaler_obj.scale_},
+                                       index=input_columns)
+    input_scaler_df.to_csv(join(output_path, f'scalers/{species}_scale_values.csv'), index_label="input")
+    return
 
 
 def partition_y_output(y, output_layers, aggregate_bins=True):

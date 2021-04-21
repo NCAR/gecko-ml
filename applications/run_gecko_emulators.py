@@ -84,7 +84,7 @@ def main():
                 plot_bootstrap_ci(all_truth, all_preds, columns, output_path, species, model_name)
                 plot_crps_bootstrap(all_truth, all_preds, columns, output_path, species, model_name)
                 plot_unstability(all_preds, columns, output_path, model_name)
-                plot_scatter_analysis(all_preds, all_truth, train_in, val_in, ['Gas [ug/m3', 'Aersol [ug_m3'],
+                plot_scatter_analysis(all_preds, all_truth, train_in, val_in, columns[1:],
                                       output_path, species, model_name)
 
         elif model_type == 'multi_ts_models':
