@@ -169,7 +169,7 @@ def combine_data(dir_path, summary_file, aggregate_bins, bin_prefix,
     file_list = glob.glob('{}ML2019_{}_ML2019_Exp*'.format(dir_path, species))
     sorted_filelist = sorted(file_list, key=lambda x:list(map(int, re.findall("_Exp(\d+)*", x))))
     
-    summary = pd.read_csv(dir_path+summary_file, skiprows=3)
+    summary = pd.read_csv(join(dir_path, summary_file), skiprows=3)
     summary.columns = [x.strip() for x in summary.columns]
     
     dfs_in = [delayed(get_data_serial)
