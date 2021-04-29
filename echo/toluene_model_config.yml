@@ -1,0 +1,84 @@
+species: 'toluene'
+dir_path: '/glade/scratch/siyuan/POSTPROCESSING/ML2910_toluene5days_reload/'
+output_path: 'test'
+summary_file: '/glade/work/siyuan/GECKO/ML2019a/GECKO-A/BOXMOD/INPUT/TOLUENE_Exp_List_ML2019_toluene_v1_LatinHyperCube.csv'
+aggregate_bins: True
+ensemble_members: 1 # set to 1 for a single run
+seq_length: 20 # only used with recurrent networks
+scaler_type: "StandardScaler"
+min_scale_range: 0
+max_scale_range: 1
+bin_prefix: ['Gas [ug/m3]', 'Aerosol [ug_m3]']
+train_start_exp: 0
+train_end_exp: 1599
+val_start_exp: 1600
+val_end_exp: 1799
+test_start_exp: 1800
+test_end_exp: 1999
+box_val_exps: 'all'
+random_seed: 8886
+input_vars: [
+    'Time [s]',
+    'Precursor [ug/m3]',
+    'Gas [ug/m3]',
+    'Aerosol [ug_m3]',
+    'temperature (K)',
+    'solar zenith angle (degree)',
+    'pre-existing aerosols (ug/m3)',
+    'o3 (ppb)',
+    'nox (ppb)',
+    'oh (10^6 molec/cm3)',
+    'id']
+output_vars: [
+    'Time [s]',
+    'Precursor [ug/m3]',
+    'Gas [ug/m3]',
+    'Aerosol [ug_m3]',
+    'id']
+dense_network:
+  hidden_layers: 1
+  hidden_neurons: 500
+  activation: "leaky"
+  output_layers: 1
+  output_activation: "linear"
+  optimizer: "adam"
+  loss: ["mae"]
+  loss_weights: [1]
+  lr: 0.0001
+  batch_size: 8192
+  use_noise: False
+  noise_sd: 0.01
+  epochs: 50
+  use_dropout: False
+  dropout_alpha: 0.1
+  kernel_reg: 'l1_l2'
+  l1_weight: 0.00001
+  l2_weight: 0.001
+  sgd_momentum: 0.9
+  adam_beta_1: 0.9
+  adam_beta_2: 0.999
+  epsilon: 0.00001
+  decay: 0
+  verbose: True
+  classifier: False
+#callbacks:
+#   ModelCheckpoint:
+#     monitor: "val_loss"
+#     filepath: "test/model.h5"
+#     save_best_only: True
+#     save_weights_only: True
+#  EarlyStopping:
+#    monitor: "val_loss"
+#    patience: 4
+#    min_delta: 0.00001
+#  ReduceLROnPlateau:
+#    monitor: "val_loss"
+#    factor: 0.2
+#    patience: 1
+#    min_lr: 1.0e-08
+#    mode: "auto"
+#    min_delta: 0.0
+#  CSVLogger:
+#    filename: "test/training.txt"
+#    separator: " "
+#    append: False
