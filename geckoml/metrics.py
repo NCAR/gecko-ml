@@ -71,6 +71,43 @@ def r2_corr(y_true, y_pred):
     return np.corrcoef(y_true, y_pred)[0, 1] ** 2
 
 
+def get_outliers(preds, truth, cols, n_extremes=10):
+    """
+    Get best/worst experiments wrt to MAE from box simulations
+    Args:
+        preds: Box model predictions (df)
+        truth: Box model truth (df)
+        cols: Features to caluculate best/worst MAE
+        n_extremes: Number of experiments to flag from each extreme
+
+    Returns: best/worst experiments from box simulation (list)
+
+    """
+    def mae_wrap(df, cols):
+        pred_cols = [x + '_pred' for x in cols]
+        MAE = mean_absolute_error(df[cols], df[pred_cols])
+        return MAE
+
+    df_p = preds.copy()
+    df_t = truth.copy()
+    df_t = df_t.set_index(['id', 'member', 'Time [s]'])
+    df_p = df_p.set_index(['id', 'member', 'Time [s]'])
+    df = df_t.join(df_p, rsuffix='_pred')
+
+    # check for inf values and collect exps with inf
+    i = df.index[np.isinf(df[cols]).any(1)]
+    inf_exps = list(np.unique(i.get_level_values(0)))
+
+    if len(inf_exps) != 0:
+        df = df.drop(index=inf_exps, level=0)
+
+    errors = df.groupby('id').apply(mae_wrap, cols)
+    best_exps = list(errors.sort_values()[:n_extremes].index)
+    worst_exps = list(errors.sort_values()[-n_extremes:].index)
+    worst_exps[:len(inf_exps)] = inf_exps
+
+    return best_exps, worst_exps
+
 def get_stability(preds, stability_thresh):
     """
     Determine if any value has crossed the positive or negative magnitude of threshold and lable unstable if true
@@ -459,3 +496,63 @@ def plot_unstability(preds, columns, output_path, model_name, stability_thresh=1
     plt.ylabel('Number Runaways', fontsize=20)
     plt.title(f'Ensemble Counts of Runaway Errors ({total_runs} Total Runs)', fontsize=24)
     plt.savefig(join(output_path, f'plots/unstable_{model_name}.png'), bbox_inches='tight')
+
+
+def plot_scatter_analysis(preds, truth, train, val, cols, output_path, species, model_name, n_exps=10):
+    """
+    Produce scatter plot of each environmental feature with respect to mean mass for each phase. Include locations
+    of top and bottom performing experiments.
+    Args:
+        preds: Box model predictions (df)
+        truth: Box model truth (df)
+        train: Training data (df)
+        val: Validation data (df)
+        cols: Features used to calculate MAE for performance comparison
+        output_path: Output path (str)
+        species: Modeled species
+        model_name: Model name
+        n_exps: Number of experiments to plot (best and worst performing)
+    """
+    mean_train = train.groupby('id').mean()
+    mean_val = val.groupby('id').mean()
+    best_exps, worst_exps = get_outliers(preds, truth, cols, n_exps)
+    best_val = mean_val[mean_val.index.isin(best_exps)]
+    worst_val = mean_val[mean_val.index.isin(worst_exps)]
+    env_vars = ['temperature (K)', 'solar zenith angle (degree)', 'pre-existing aerosols (ug/m3)', 'o3 (ppb)',
+                'nox (ppb)', 'oh (10^6 molec/cm3)']
+    phase = ['Precursor [ug/m3]', 'Gas [ug/m3]', 'Aerosol [ug_m3]']
+
+    fig, ax = plt.subplots(3, 6, figsize=(35, 20), constrained_layout=True)
+    hue = 'temperature (K)'
+    c = 'coolwarm'
+
+    for i in range(3):
+
+        for j, var in enumerate(env_vars):
+
+            s = sns.scatterplot(data=mean_train, y=phase[i], x=var, hue=hue, ax=ax[i, j], palette=c, legend=False)
+            s.set(xlabel=None)
+            s.set(ylabel=None)
+
+            u = sns.scatterplot(data=worst_val, y=phase[i], x=var, ax=ax[i, j], marker='X', s=300, color='k',
+                                legend=False)
+            u.set(xlabel=None)
+            u.set(ylabel=None)
+
+            w = sns.scatterplot(data=best_val, y=phase[i], x=var, ax=ax[i, j], marker='s', s=200, color='k',
+                                legend=False)
+            w.set(xlabel=None)
+            w.set(ylabel=None)
+
+            if i == 0:
+                ax[i, j].set_title(var, fontsize=18, weight='bold')
+
+            if j == 0:
+                ax[i, j].set_ylabel(phase[i], fontsize=18, weight='bold')
+
+    norm = plt.Normalize(mean_train[hue].min(), mean_train[hue].max())
+    sm = plt.cm.ScalarMappable(cmap=c, norm=norm)
+    cb = fig.colorbar(sm, ax=ax.flat, aspect=100)
+    cb.set_label(label=hue, weight='bold', size=24)
+    plt.suptitle(f'{species.capitalize()} - {model_name.upper()}', fontsize=50, y=1.08)
+    plt.savefig(join(output_path, f'plots/scatter_analysis_{model_name}_{species}.png'), bbox_inches='tight')

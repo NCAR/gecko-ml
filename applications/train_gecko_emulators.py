@@ -2,7 +2,7 @@ import sys
 sys.path.append('../')
 from geckoml.models import DenseNeuralNetwork, LongShortTermMemoryNetwork
 from geckoml.data import combine_data, split_data, reshape_data, partition_y_output, get_output_scaler, \
-    reconstruct_preds, save_metrics
+    reconstruct_preds, save_metrics, save_scaler_csv
 from sklearn.preprocessing import StandardScaler, RobustScaler, MaxAbsScaler, MinMaxScaler, QuantileTransformer
 from geckoml.metrics import ensembled_metrics, match_true_exps
 import tensorflow as tf
@@ -124,6 +124,8 @@ def main():
 
     joblib.dump(x_scaler, join(output_path, 'scalers', f'{species}_x.scaler'))
     joblib.dump(y_scaler, join(output_path, 'scalers', f'{species}_y.scaler'))
+    save_scaler_csv(x_scaler, input_vars[1:-1], output_path, species, scaler_type)
+    in_train.to_parquet(join(output_path, 'validation_data', f'{species}_in_train.parquet'))
     in_val.to_parquet(join(output_path, 'validation_data', f'{species}_in_val.parquet'))
     out_val.to_parquet(join(output_path, 'validation_data', f'{species}_out_val.parquet'))
 

@@ -7,7 +7,7 @@ import time
 import joblib
 from geckoml.box import GeckoBoxEmulator, GeckoBoxEmulatorTS
 from geckoml.metrics import ensembled_metrics, match_true_exps, plot_ensemble, plot_bootstrap_ci, \
-    plot_crps_bootstrap, plot_unstability
+    plot_crps_bootstrap, plot_unstability, plot_scatter_analysis
 from geckoml.data import inverse_log_transform, save_metrics
 from dask.distributed import Client, LocalCluster
 from os.path import join
@@ -35,6 +35,7 @@ def main():
     columns = ['Precursor [ug/m3]', 'Gas [ug/m3]', 'Aerosol [ug_m3]']
 
     # Read validation data and scaler objects
+    train_in = pd.read_parquet(join(output_path, 'validation_data', f'{species}_in_train.parquet'))
     val_in = pd.read_parquet(join(output_path, 'validation_data', f'{species}_in_val.parquet'))
     val_out = pd.read_parquet(join(output_path, 'validation_data', f'{species}_out_val.parquet'))
     val_out = inverse_log_transform(val_out, ['Precursor [ug/m3]'])
@@ -83,6 +84,8 @@ def main():
                 plot_bootstrap_ci(all_truth, all_preds, columns, output_path, species, model_name)
                 plot_crps_bootstrap(all_truth, all_preds, columns, output_path, species, model_name)
                 plot_unstability(all_preds, columns, output_path, model_name)
+                plot_scatter_analysis(all_preds, all_truth, train_in, val_in, columns[1:],
+                                      output_path, species, model_name)
 
         elif model_type == 'multi_ts_models':
             for model_name in config['model_configurations'][model_type].keys():
@@ -102,6 +105,8 @@ def main():
 
                 plot_ensemble(truth=y_true, preds=predictions, output_path=output_path,
                               species=species, model_name=model_name)
+                plot_scatter_analysis(all_preds, all_truth, train_in, val_in, ['Gas [ug/m3', 'Aersol [ug_m3'],
+                                      output_path, species, model_name)
                 save_metrics(multi_ts_metrics[model_name], output_path, model_name, ensemble_members, 'box')
 
     print('Completed in {0:0.1f} minutes.'.format((time.time() - start) / 60))
