@@ -166,9 +166,8 @@ def combine_data(dir_path, summary_file, aggregate_bins, bin_prefix,
         output_subset: Complete pandas output dataframe (lagged by one time step)
     """
     
-    file_list = glob.glob('{}ML2019_{}_ML2019_Exp*'.format(dir_path, species))
+    file_list = glob.glob(join(dir_path, f'ML2019_{species}_ML2019_Exp*'))
     sorted_filelist = sorted(file_list, key=lambda x:list(map(int, re.findall("_Exp(\d+)*", x))))
-
     summary = pd.read_csv(join(dir_path, summary_file), skiprows=3)
     summary.columns = [x.strip() for x in summary.columns]
     
