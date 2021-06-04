@@ -59,7 +59,7 @@ def main():
                 for member in range(ensemble_members):
                     nnet_path = join(output_path, 'models', f'{species}_{model_name}_{member}')
                     mod = GeckoBoxEmulator(neural_net_path=nnet_path, output_scaler=y_scaler,
-                                           input_cols=input_cols, output_cols=output_cols)
+                                           input_cols=input_cols, output_cols=output_cols, seed=config['random_seed'])
 
                     box_preds = mod.run_ensemble(client=client, data=scaled_val_in, num_timesteps=n_time_steps,
                                                  exps=exps)
@@ -91,7 +91,7 @@ def main():
                 for member in range(ensemble_members):
                     nnet_path = join(output_path, 'models', f'{species}_{model_name}_{member}')
                     mod = GeckoBoxEmulatorTS(neural_net_path=nnet_path, output_scaler=y_scaler, seq_length=seq_length,
-                                                 input_cols=input_cols, output_cols=output_cols)
+                                                 input_cols=input_cols, output_cols=output_cols, seed=config['random_seed'])
                     box_preds = mod.run_ensemble(client=client, data=scaled_val_in, num_timesteps=n_time_steps,
                                                  exps=exps)
                     y_true, y_preds = match_true_exps(truth=val_out, preds=box_preds, num_timesteps=n_time_steps,
