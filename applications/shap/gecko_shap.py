@@ -578,20 +578,21 @@ if __name__ == '__main__':
         input_size = val_in_array.shape[-1]
         output_size = val_in_array.shape[-1] - val_env_array.shape[-1]
 
-        n_layers = conf["rnn_network"]["n_layers"]
-        hidden_dim = conf["rnn_network"]["hidden_size"]
-        rnn_dropout = conf["rnn_network"]["rnn_dropout"]
+        rnn_conf = conf["model_configurations"]["single_ts_models"]["gru"]
+        n_layers = rnn_conf["n_layers"]
+        hidden_dim = rnn_conf["hidden_size"]
+        rnn_dropout = rnn_conf["rnn_dropout"]
 
         # Using a custom GRU net to handle return of hidden states
         model = CustomNet(hidden_dim, n_layers, rnn_dropout)
-        model.build(input_size, output_size)
+        model.build(input_size, output_size, model_weights)
 
-        # Load the weights from file
-        checkpoint = torch.load(
-            model_weights,
-            map_location=lambda storage, loc: storage
-        )
-        model.load_state_dict(checkpoint["model_state_dict"])
+#         # Load the weights from file
+#         checkpoint = torch.load(
+#             model_weights,
+#             map_location=lambda storage, loc: storage
+#         )
+#         model.load_state_dict(checkpoint["model_state_dict"])
 
         # Move the model to device (cpu or gpu)
         model = model.to(device)

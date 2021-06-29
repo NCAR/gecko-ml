@@ -18,6 +18,6 @@ python gecko_shap.py /glade/work/keelyl/geckonew/gecko-ml/config/apin_O3_agg.yml
 
 python gecko_shap.py /glade/work/schreck/repos/GECKO_OPT/gecko-ml/echo/toluene/6/model.yml -s toluene_gru -m /glade/work/schreck/repos/GECKO_OPT/gecko-ml/echo/toluene/6/best.pt
 
-python gecko_shap.py /glade/work/schreck/repos/GECKO_OPT/gecko-ml/echo/apin/0/model.yml -s apin_gru -m /glade/work/schreck/repos/GECKO_OPT/gecko-ml/echo/apin/0/best.pt
+python gecko_shap.py /glade/work/schreck/repos/GECKO_OPT/gecko-ml/echo/apin/7/model.yml -s apin_gru -m /glade/work/schreck/repos/GECKO_OPT/gecko-ml/echo/apin/7/best.pt
 
-python gecko_shap.py /glade/work/schreck/repos/GECKO_OPT/gecko-ml/echo/dodecane/0/model.yml -s dodecane_gru -m /glade/work/schreck/repos/GECKO_OPT/gecko-ml/echo/dodecane/0/best.pt
+python gecko_shap.py /glade/work/schreck/repos/GECKO_OPT/gecko-ml/echo/dodecane/3/model.yml -s dodecane_gru -m /glade/work/schreck/repos/GECKO_OPT/gecko-ml/echo/dodecane/3/best.pt

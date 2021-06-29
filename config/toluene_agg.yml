@@ -64,5 +64,23 @@ model_configurations:
       decay: 0.00001
       verbose:  1
       classifier: False
-
-
+    gru:
+      hidden_size: 3264
+      n_layers: 1
+      lr: 2.090681853246855e-05
+      l2_weight: 6.53154661748469e-08
+      rnn_dropout: 0.03529729403043094
+      batch_size: 503
+      epochs: 200
+      verbose: True
+  
+pbs:
+  kernel: "ncar_pylib /glade/work/$USER/py37"
+  bash: ["module load ncarenv/1.3 gnu/8.3.0 openmpi/3.1.4 python/3.7.5 cuda cudnn"]
+  batch:
+    N: "gecko-gru"
+    l: ["select=1:ncpus=8:ngpus=1:mem=128GB", "walltime=12:00:00", "gpu_type=v100"]
+    A: "NAML0001"
+    q: "casper"
+    o: "/glade/work/schreck/repos/GECKO_OPT/clean/gecko-ml/applications/test/out"
+    e: "/glade/work/schreck/repos/GECKO_OPT/clean/gecko-ml/applications/test/err"
