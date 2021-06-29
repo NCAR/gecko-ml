@@ -1,14 +1,24 @@
-from tensorflow.keras.layers import Input, Dense, Dropout, GaussianNoise, Activation, \
-    Concatenate, BatchNormalization, LSTM, Conv1D, AveragePooling1D, MaxPooling1D, LeakyReLU
-from tensorflow.keras.models import Model
+from tensorflow.keras.layers import (Input, Dense, Dropout, GaussianNoise, 
+                                     Activation, Concatenate, BatchNormalization, 
+                                     LSTM, Conv1D, AveragePooling1D, MaxPooling1D, 
+                                     LeakyReLU)
+
 from tensorflow.keras.regularizers import l1, l2, l1_l2
 from tensorflow.keras.optimizers import Adam, SGD
-import tensorflow.keras.backend as K
 from keras_self_attention import SeqSelfAttention
+from tensorflow.keras.models import Model
+
+import tensorflow.keras.backend as K
 import tensorflow as tf
-import numpy as np
 import xarray as xr
 import pandas as pd
+import numpy as np
+import logging
+import torch
+import os
+
+
+logger = logging.getLogger(__name__)
 
 
 class DenseNeuralNetwork(object):
@@ -338,3 +348,187 @@ class LongShortTermMemoryNetwork(object):
             y_out = np.block(self.model.predict(x, batch_size=self.batch_size))
         return y_out
 
+
+
+class GRUNet(torch.nn.Module):
+    
+    """
+    A GRU Neural Network Model that can support arbitrary numbers of hidden layers.
+
+    Attributes:
+        hidden_neurons: int
+        - Number of neurons in each hidden layer
+        hidden_layers: int
+        - Number of hidden layers
+        drop_prob: float
+        - proportion of neurons randomly set to 0.
+        device: str
+        - CPU or GPU identifier
+        
+        gru: torch.nn.Module
+        - Torch GRU model
+        fc: torch.nn.Module
+        - Torch Linear layer for resizing the output of the GRU
+        relu: torch.nn.Module
+        - The activation on the GRU output 
+        hidden_model: torch.nn.Module
+        - Torch Linear layer for the initial hidden state
+    """
+    
+    def __init__(self, 
+                 hidden_dim: int,
+                 n_layers: int, 
+                 drop_prob: float = 0.2): 
+        
+        super(GRUNet, self).__init__()
+        
+        self.hidden_dim = hidden_dim
+        self.n_layers = n_layers
+        self.dr = drop_prob
+        self.device = None
+        
+        self.gru = None
+        self.fc = None
+        self.relu = None
+        self.hidden_model = None
+        
+    def build(self, 
+              input_dim: int, 
+              output_dim: int,
+              weights_path: str = None) -> None:
+        
+        """
+            Build the GRU network 
+        
+            input_dim: int
+            - The size of the input
+            output_dim: int
+            - The number of prediction targets
+        """
+        
+        self.gru = torch.nn.GRU(input_dim, self.hidden_dim, self.n_layers, batch_first=True, dropout=self.dr)
+        self.fc = torch.nn.Linear(self.hidden_dim, output_dim)
+        self.relu = torch.nn.LeakyReLU()
+        self.hidden_model = torch.nn.Linear(input_dim, self.hidden_dim)
+        
+        total_params = sum(p.numel() for p in self.parameters())
+        trainable_params = sum(p.numel() for p in self.parameters() if p.requires_grad)
+        logger.info(
+            f"The model contains {total_params} total parameters, {trainable_params} are trainable"
+        )
+        
+        if isinstance(weights_path, str):
+            if os.path.isfile(weights_path):
+                self.load_weights(weights_path)
+            else:
+                logger.info(f"Failed to load model weights at {weights_path}")
+                
+        
+    def load_weights(self, weights_path: str) -> None:
+        
+        """
+            Loads model weights given a valid weights path
+            
+            weights_path: str
+            - File path to the weights file (.pt)
+        """
+        logger.info(f"Loading model weights from {weights_path}")
+        
+        try:
+            checkpoint = torch.load(
+                weights_path,
+                map_location=lambda storage, loc: storage
+            )
+            self.load_state_dict(checkpoint["model_state_dict"])
+        except Exception as E:
+            logger.info(
+                f"Failed to load model weights at {weights_path} due to error {str(E)}"
+            )
+        
+        
+    def forward(self, 
+                x: torch.Tensor, 
+                h: torch.Tensor) -> (torch.Tensor, torch.Tensor):
+        
+        """
+            Pass the inputs through the model and return the prediction
+        
+            Inputs
+            x: torch.Tensor
+            - The input containing precursor, gas, aerosol, and envionmental values
+            h: torch.Tensor
+            - The hidden state to the GRU at time t
+            
+            Returns
+            out: torch.Tensor
+            - The encoded input
+            h: torch.Tensor
+            - The hidden state returned by the GRU at time t + 1
+        """
+        
+        x = x.unsqueeze(1)
+        out, h = self.gru(x, h)
+        out = self.fc(self.relu(out[:,-1]))
+        return out, h
+    
+    def init_hidden(self, 
+                    x: torch.Tensor) -> torch.Tensor:
+        
+        """
+            Predict a hidden state for the initial input to the model at t = 0
+        
+            Inputs
+            x: torch.Tensor
+            - The input containing precursor, gas, aerosol, and envionmental values
+            
+            Returns: torch.Tensor
+            - A hidden state corresponding to the initial condition
+        """
+        
+        device = self._device() if self.device is None else self.device
+        hidden = self.hidden_model(x.to(device)).unsqueeze(0)
+        hidden = torch.cat([hidden for x in range(self.n_layers)]) if self.n_layers > 1 else hidden
+        return hidden
+    
+    def _device(self) -> str:
+        
+        """
+            Set and return the device that the model was placed onto.
+        
+            Inputs: None
+            Returns: str
+            - Device identifier
+        
+        """
+        
+        self.device = next(self.parameters()).device
+        return self.device
+    
+    def predict(self, 
+                x: np.array, 
+                h: np.array) -> (np.array, np.array):
+        
+        """
+            Predict method for running the model in box mode.
+            Handles converting numpy tensor input to torch
+            and moving the data to the GPU
+        
+            Inputs
+            x: np.array
+            - The input containing precursor, gas, aerosol, and envionmental values
+            h: np.array
+            - The hidden state to the GRU at time t
+            
+            Returns: str
+            x: np.array
+            - The encoded input
+            h: np.array
+            - The hidden state to the GRU at time t + 1
+        
+        """
+        
+        device = self._device() if self.device is None else self.device
+        with torch.no_grad():
+            x = torch.from_numpy(x).float().to(device)
+            x, h = self.forward(x, h)
+        return x.cpu().detach().numpy(), h
