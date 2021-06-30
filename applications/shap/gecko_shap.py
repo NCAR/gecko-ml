@@ -10,9 +10,11 @@ import multiprocessing as mp
 import tqdm.auto as tqdm
 import pandas as pd
 import numpy as np
+import subprocess
 import logging
 import joblib
 import torch
+import copy
 import yaml
 import shap
 import time
@@ -26,7 +28,7 @@ from geckoml.models import GRUNet
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from argparse import ArgumentParser
 from os.path import join
-from typing import List
+from typing import List, Dict
 
 
 # Set up the default logger 
@@ -46,9 +48,12 @@ random.seed(5000)
 
 
 def args():
-    parser = ArgumentParser(description=
-                            "Options for computing SHAP values for GECKO models"
-                            )
+    
+    description = "Options for computing SHAP values for GECKO models.\n"
+    description += "To launch N PBS jobs, specify the number of workers (N) and leave worker = -1.\n"
+    description += "To run the script on a subset of experiments, specify the number of workers (N) and the worker ID (0 < x < workers-1)"
+    
+    parser = ArgumentParser(description=description)
 
     parser.add_argument("model_config", type=str, help=
     "Path to the model configuration containing your inputs."
@@ -80,8 +85,8 @@ def args():
         "--worker",
         dest="worker",
         type=int,
-        default=1,
-        help="The subset of experiments to be analyzed by this worker (the ID of the worker)"
+        default=-1,
+        help="The subset of experiments to be analyzed by this worker (the ID of the worker). Default is -1."
     )
     parser.add_argument(
         "-m",
@@ -100,6 +105,106 @@ def args():
         help="Number of CPU cores available to process the data"
     )
     return vars(parser.parse_args())
+
+
+def prepare_pbs_launch_script(model_config: Dict[str, str],
+                              workers: int, 
+                              worker: int, 
+                              best_model_path: str):
+    
+    """ Create a list of commands to send to the PBS scheduler from the model configuration
+    Args:
+        model_config (str)
+    Returns:
+        pbs_options (List[str])
+    """
+    
+    pbs_options = ["#!/bin/bash -l"]
+    model_conf_path =os.path.join(model_config["output_path"], "model.yml")
+    for arg, val in model_config["pbs"]["batch"].items():
+        if arg == "l" and type(val) == list:
+            for opt in val:
+                pbs_options.append(f"#PBS -{arg} {opt}")
+        elif len(arg) == 1:
+            pbs_options.append(f"#PBS -{arg} {val}")
+        else:
+            pbs_options.append(f"#PBS --{arg}={val}")     
+    if "bash" in model_config["pbs"]:
+        if len(model_config["pbs"]["bash"]) > 0:
+            for line in model_config["pbs"]["bash"]:
+                pbs_options.append(line)
+    if "kernel" in model_config["pbs"]:
+        if model_config["pbs"]["kernel"] is not None:
+            pbs_options.append(f'{model_config["pbs"]["kernel"]}')
+    gecko_shap_script = os.path.realpath(__file__)
+    conf = model_conf_path
+    save = model_config["output_path"]
+    model = best_model_path
+    launch_cmd = f"python {gecko_shap_script} {conf} -s {save} -m {model} --workers {workers} --worker {worker}"
+    pbs_options.append(launch_cmd)
+    return pbs_options
+
+
+def submit_workers(model_conf: Dict[str, str], 
+                   save_path: str, 
+                   best_model_path: str, 
+                   workers: int):
+    
+    """ Submit launch scripts to the PBS scheduler
+    Args:
+        model_conf (Dict[str, str])
+        save_path (str)
+        workers (int)
+    """
+    
+    # Grab the parent save location for the models
+    conf = copy.deepcopy(model_conf)
+    conf["output_path"] = save_path
+    conf["pbs"]["batch"]["o"] = os.path.join(save_path, "out")
+    conf["pbs"]["batch"]["e"] = os.path.join(save_path, "err")
+
+    # Save the updated conf to the new directory
+    conf_save_path = f'{save_path}/model.yml'
+    with open(conf_save_path, 'w') as outfile:
+        logger.info(f"Saving a modified configuration (model.yml) to {save_path}")
+        yaml.dump(conf, outfile, default_flow_style=False)
+    
+    for worker in range(workers):
+        
+        # Prepare the launch script pointing to the new config file.
+        logger.info(f"Preparing the launch script for worker {worker}")
+        launch_script = prepare_pbs_launch_script(
+            conf, 
+            workers,
+            worker,
+            best_model_path
+        )
+        
+        # Save the configured script
+        logger.info(f"Saving the launch script (launch_pbs_{worker}.sh) to {save_path}")
+        script_location = os.path.join(save_path, f"launch_pbs_{worker}.sh")
+        with open(script_location, "w") as fid:
+            for line in launch_script:
+                fid.write(f"{line}\n")
+
+        # Launch the slurm job
+        name_condition = "N" in conf["pbs"]["batch"]
+        slurm_job_name = conf["pbs"]["batch"]["N"] if name_condition else "gru_shap"
+        
+        w = subprocess.Popen(
+            f"qsub -N {slurm_job_name}_{worker} {script_location}",
+            shell = True,
+            stdout = subprocess.PIPE,
+            stderr = subprocess.PIPE
+        ).communicate()
+        job_id = w[0].decode("utf-8").strip("\n")
+        logger.info(
+            f"Submitted pbs batch job {worker + 1}/{workers} with id {job_id}"
+        )
+        
+        # Write the job ids to file for reference
+        with open(os.path.join(save_path, "job_id.txt"), "a+") as fid:
+            fid.write(f"{job_id}\n")
 
 
 def box_val_mlp(model: tf.python.keras.engine.training.Model,
@@ -128,7 +233,7 @@ def box_val_mlp(model: tf.python.keras.engine.training.Model,
     - Array containing the inputs to the model at each time step
     """
     
-    logging.info("Preparing the validation data to compute SHAP")
+    logger.info("Preparing the validation data to compute SHAP")
     
     in_array_size = in_array.shape[-1]
     out_array_size = in_array_size - env_array.shape[-1]
@@ -176,7 +281,7 @@ def box_val_rnn(model: torch.nn.Module,
     """
     
     name = "training" if len(exps) > 200 else "validation"
-    logging.info(f"Preparing the {name} data to compute SHAP")
+    logger.info(f"Preparing the {name} data to compute SHAP")
     
     in_array_size = in_array.shape[-1]
     out_array_size = in_array_size - env_array.shape[-1]
@@ -225,7 +330,7 @@ def results(exp_id: str,
     Returns: None
     """
     
-    logging.info(f"Post-processing the SHAP results for experiment {exp_id}")
+    logger.info(f"Post-processing the SHAP results for experiment {exp_id}")
     
     pre = np.vstack([i[0] for i in shap_results])
     gas = np.vstack([i[1] for i in shap_results])
@@ -426,7 +531,7 @@ if __name__ == '__main__':
     config_file = args_dict.pop("model_config")
 
     if not os.path.isfile(config_file):
-        logging.warning(
+        logger.warning(
             f"You must supply a valid configuration. The file at {config_file} does not exist."
         )
         sys.exit(1)
@@ -445,18 +550,18 @@ if __name__ == '__main__':
 
     # Config check some of the SHAP settings
     if not os.path.isdir(shap_save_location):
-        logging.info(f"Creating the directory {shap_save_location} to save SHAP results")
+        logger.info(f"Creating the directory {shap_save_location} to save SHAP results")
         os.mkdir(shap_save_location)
 
     if not os.path.isdir(model_weights) and not os.path.isfile(model_weights):
-        logging.warning(
+        logger.warning(
             f"Failed to load the model because the directory {model_weights} does not exist. Exiting."
         )
         sys.exit(1)
 
     ############################################################
     # Set up a logger
-
+    
     root = logging.getLogger()
     root.setLevel(logging.DEBUG)
     formatter = logging.Formatter('%(levelname)s:%(name)s:%(message)s')
@@ -466,7 +571,7 @@ if __name__ == '__main__':
     ch.setLevel(logging.INFO)
     ch.setFormatter(formatter)
     root.addHandler(ch)
-
+    
     # Save the log file
     logger_name = os.path.join(shap_save_location, "log.txt")
     fh = logging.FileHandler(logger_name,
@@ -477,7 +582,13 @@ if __name__ == '__main__':
     root.addHandler(fh)
 
     ############################################################
+    
+    # Submit N workers process the experiments in batches, then exit.
+    if worker < 0:
+        submit_workers(conf, shap_save_location, model_weights, workers)
+        sys.exit()
 
+    # Compute SHAP values given a model and data
     # Load conf args
     species = conf['species']
     output_path = conf['output_path']
@@ -585,14 +696,9 @@ if __name__ == '__main__':
 
         # Using a custom GRU net to handle return of hidden states
         model = CustomNet(hidden_dim, n_layers, rnn_dropout)
+        
+        # Build the model and load the pretrained weights
         model.build(input_size, output_size, model_weights)
-
-#         # Load the weights from file
-#         checkpoint = torch.load(
-#             model_weights,
-#             map_location=lambda storage, loc: storage
-#         )
-#         model.load_state_dict(checkpoint["model_state_dict"])
 
         # Move the model to device (cpu or gpu)
         model = model.to(device)
@@ -640,7 +746,7 @@ if __name__ == '__main__':
 
     # Option to use multiple workers (nodes)
     if workers > 1:
-        logging.info(
+        logger.info(
             f"Using {workers} workers (nodes), I am worker {worker + 1} / {workers}"
         )
         val_experiments = np.array_split(val_experiments, workers)
@@ -651,7 +757,7 @@ if __name__ == '__main__':
         
         # Perform SHAP analysis on one experiment
         t0 = time.time()
-        logging.info(f"Starting experiment {exp}, {k + 1} / {len(val_experiments)}")
+        logger.info(f"Starting experiment {exp}, {k + 1} / {len(val_experiments)}")
         experiment = Experiment(_x, idx, explainer, _h, background)
         shap_results = [experiment.work(t) for t in tqdm.tqdm(range(_x.shape[1]))]
 
@@ -661,10 +767,10 @@ if __name__ == '__main__':
         # Log the time it took to perform SHAP analysis on 1 experiment
         runtime = time.time() - t0
         run_times.append(runtime)
-        logging.info(f"Completed experiment {exp}. This took {runtime} s")
+        logger.info(f"Completed experiment {exp}. This took {runtime} s")
 
         # Estimate how much time remains
         remaining = len(val_experiments) - len(run_times)
         average_runtime = np.mean(run_times)
         time_to_finish = (average_runtime * remaining) / 60.0
-        logging.info(f"There are {remaining} experiments remaining, estimated time left: {time_to_finish} mins")
+        logger.info(f"There are {remaining} experiments remaining, estimated time left: {time_to_finish} mins")
