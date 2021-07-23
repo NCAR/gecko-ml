@@ -40,7 +40,7 @@ logger = logging.getLogger(__name__)
 
 
 
-def prepare_pbs_launch_script(model_config: str):
+def prepare_pbs_launch_script(model_config: str, worker: int):
     
     """ Create a list of commands to send to the PBS scheduler from the model configuration
     Args:
@@ -50,7 +50,7 @@ def prepare_pbs_launch_script(model_config: str):
     """
     
     pbs_options = ["#!/bin/bash -l"]
-    save_loc = os.path.join(model_config["output_path"], "model.yml")
+    save_loc = os.path.join(model_config["output_path"], f"models/model_{worker}.yml")
     for arg, val in model_config["pbs"]["batch"].items():
         if arg == "l" and type(val) == list:
             for opt in val:
@@ -82,33 +82,35 @@ def submit_workers(model_conf, workers):
     for worker in range(workers):
         # Grab the parent save location for the models
         conf = copy.deepcopy(model_conf)
-        script_path = os.path.join(conf["output_path"], f"{worker}")
-        conf["output_path"] = script_path
-        conf["pbs"]["batch"]["o"] = os.path.join(script_path, "out")
-        conf["pbs"]["batch"]["e"] = os.path.join(script_path, "err")
-        # Check if directories exist
-        if os.path.isdir(script_path):
-            # If yes, tell the user they need to delete the directory and try again
-            logger.warning(
-                f"You must remove cached data at {script_path} before this script can run. Exiting."
-            )
-            sys.exit(1)
-        # Else no, make the new directory. 
-        os.mkdir(script_path)
-        logger.info(f"Creating a new directory at {script_path}")
+        script_path = os.path.join(conf["output_path"], f"models")
+        #conf["output_path"] = script_path
+        conf["pbs"]["batch"]["o"] = os.path.join(script_path, f"out_{worker}")
+        conf["pbs"]["batch"]["e"] = os.path.join(script_path, f"err_{worker}")
+        conf["model_configurations"]["single_ts_models"]["gru"]["member"] = worker
+        
+#         # Check if directories exist
+#         if os.path.isdir(script_path):
+#             # If yes, tell the user they need to delete the directory and try again
+#             logger.warning(
+#                 f"You must remove cached data at {script_path} before this script can run. Exiting."
+#             )
+#             sys.exit(1)
+#         # Else no, make the new directory. 
+#         os.mkdir(script_path)
+#         logger.info(f"Creating a new directory at {script_path}")
         
         # Save the updated conf to the new directory
-        with open(f'{script_path}/model.yml', 'w') as outfile:
+        with open(f'{script_path}/model_{worker}.yml', 'w') as outfile:
             logger.info(f"Saving a modified configuration (model.yml) to {script_path}")
             yaml.dump(conf, outfile, default_flow_style=False)
         
         # Prepare the launch script pointing to the new config file.
         logger.info(f"Preparing the launch script for worker {worker}")
-        launch_script = prepare_pbs_launch_script(conf)
+        launch_script = prepare_pbs_launch_script(conf, worker)
         
         # Save the configured script
         logger.info(f"Saving the launch script (launch_pbs.sh) to {script_path}")
-        script_location = os.path.join(script_path, "launch_pbs.sh")
+        script_location = os.path.join(script_path, f"launch_pbs_{worker}.sh")
         with open(script_location, "w") as fid:
             for line in launch_script:
                 fid.write(f"{line}\n")
@@ -173,13 +175,16 @@ def train(conf):
     n_layers = rnn_conf["n_layers"]
     hidden_dim = rnn_conf["hidden_size"]
     rnn_dropout = rnn_conf["rnn_dropout"]
+    hidden_weight = rnn_conf["hidden_weight"]
     verbose = rnn_conf["verbose"]
-    lr_patience = 3
-    stopping_patience = 10
+    
+    lr_patience = rnn_conf["lr_patience"]
+    stopping_patience = rnn_conf["stopping_patience"]
+    member = conf["model_configurations"]["single_ts_models"]["gru"]["member"]
 
     ### Want to be able to reliably test L2 penalty = 0, but the 
     ### optuna loguniform prevents this -- so truncate below a certain value
-    weight_decay = weight_decay if weight_decay > 1e-10 else 0.0
+    weight_decay = weight_decay if weight_decay > 1e-12 else 0.0
 
     # Load the data
     logger.info(f"Loading the train and validation data for {species}, this may take a few minutes")
@@ -235,11 +240,14 @@ def train(conf):
     scaled_out_train = y_scaler.transform(out_train.drop(['Time [s]', 'id'], axis=1))
     scaled_out_val = y_scaler.transform(out_val.drop(['Time [s]', 'id'], axis=1))
     
-    joblib.dump(x_scaler, os.path.join(output_path, f'{species}_x.scaler'))
-    joblib.dump(y_scaler, os.path.join(output_path, f'{species}_y.scaler'))
+    joblib.dump(x_scaler, os.path.join(output_path, f'scalers/{species}_{member}_x.scaler'))
+    joblib.dump(y_scaler, os.path.join(output_path, f'scalers/{species}_{member}_y.scaler'))
 
     y = partition_y_output(scaled_out_train, 1, aggregate_bins)
     y_val = partition_y_output(scaled_out_val, 1, aggregate_bins)
+    
+    # Validation starting times
+    start_times = [0, 10, 50, 100, 500, 1000]
     
     # Batch the training experiments 
     logger.info("Batching the training data by experiment, this may take a few minutes")
@@ -267,16 +275,10 @@ def train(conf):
     output_size = in_array.shape[-1] - env_array.shape[-1]
 
     # Load the model 
-    logger.info("Loading the 1-step GRU model")
+    logger.info("Loading a 1-step GRU model")
     model = GRUNet(hidden_dim, n_layers, rnn_dropout)
     model.build(input_size, output_size)
     model = model.to(device)
-    
-    total_params = sum(p.numel() for p in model.parameters())
-    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    logger.info(
-        f"The model contains {total_params} total parameters, {trainable_params} are trainable"
-    )
 
     # Load the train and test losses
     logger.info("Loading the train and validation loss criterion (Huber and MAE respectively)")
@@ -297,7 +299,7 @@ def train(conf):
         optimizer, 
         patience = lr_patience, 
         verbose = True,
-        min_lr = 1.0e-12
+        min_lr = 1.0e-13
     )
 
     # Train the model 
@@ -315,7 +317,8 @@ def train(conf):
             train_exps, 
             num_timesteps, 
             in_array, 
-            env_array
+            env_array,
+            hidden_weight = hidden_weight
         )
 
         val_loss, step_val_loss, _, _ = rnn_box_test(
@@ -326,7 +329,8 @@ def train(conf):
             val_env_array, 
             y_scaler, 
             output_vars, 
-            out_val
+            out_val,
+            start_times = start_times
         )
 
         # Get the last learning rate
@@ -341,7 +345,7 @@ def train(conf):
         df = pd.DataFrame.from_dict(results_dict).reset_index()
 
         # Save the dataframe to disk
-        df.to_csv(os.path.join(conf["output_path"], "training_log.csv"), index = False)
+        df.to_csv(os.path.join(conf["output_path"], f"models/training_log_{member}.csv"), index = False)
 
         logger.info(
             f"Epoch: {epoch} train_loss: {train_loss:.6f} val_loss: {val_loss:.6f} step_val_loss: {step_val_loss:.6f} lr: {learning_rate}"
@@ -358,8 +362,8 @@ def train(conf):
                 'optimizer_state_dict': optimizer.state_dict(),
                 'loss': val_loss
             }
-            torch.save(state_dict, os.path.join(conf["output_path"], "best.pt"))
-
+            torch.save(state_dict, os.path.join(conf["output_path"], f"models/{species}_gru_{member}.pt"))
+                        
         # Stop training if we have not improved after X epochs
         best_epoch = [i for i,j in enumerate(results_dict["val_loss"]) if j == min(results_dict["val_loss"])][0]
         offset = epoch - best_epoch
@@ -410,6 +414,22 @@ if __name__ == '__main__':
         
     with open(config_file) as cf:
         config = yaml.load(cf, Loader=yaml.FullLoader)
+        
+        
+#     # Check if directories exist
+#     if os.path.isdir(script_path):
+#         # If yes, tell the user they need to delete the directory and try again
+#         logger.warning(
+#             f"You must remove cached data at {script_path} before this script can run. Exiting."
+#         )
+#         sys.exit(1)
+#     # Else no, make the new directory. 
+#     os.mkdir(script_path)
+#     logger.info(f"Creating a new directory at {script_path}")
+        
+    # Create the save directories when submitting 
+    for folder in ['models', 'plots', 'validation_data', 'metrics', 'scalers']:
+        os.makedirs(join(config["output_path"], folder), exist_ok=True)
 
     ############################################################
     
@@ -424,7 +444,8 @@ if __name__ == '__main__':
     root.addHandler(ch)
     
     # Save the log file
-    logger_name = os.path.join(config["output_path"], "log.txt")
+    member = config["model_configurations"]["single_ts_models"]["gru"]["member"]
+    logger_name = os.path.join(config["output_path"], f"models/log_{member}.txt")
     fh = logging.FileHandler(logger_name,
                              mode="w",
                              encoding='utf-8')

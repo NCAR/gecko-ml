@@ -312,7 +312,9 @@ def rnn_box_train_one_epoch(model,
                             exps, 
                             num_timesteps, 
                             in_array, 
-                            env_array):
+                            env_array, 
+                            hidden_weight = 1.0, 
+                            grad_clip = 1.0):
     
     """ Train an RNN model for one epoch given training data as input
     Args:
@@ -354,8 +356,7 @@ def rnn_box_train_one_epoch(model,
         optimizer.zero_grad()
 
         h0 = model.init_hidden(_in_array[:, 0, :])
-        #h0 = model.init_hidden(_in_array.shape[0])
-        pred, h0 = model(_in_array[:, 0, :], h0.detach())
+        pred, h0 = model(_in_array[:, 0, :], h0)
 
         # get loss for the predicted output
         loss = loss_fn(_in_array[:, 1, :3], pred)
@@ -365,6 +366,7 @@ def rnn_box_train_one_epoch(model,
         train_epoch_loss.append(loss.item())
 
         # update parameters
+        torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
         optimizer.step()
 
         for i in range(1, num_timesteps-1): 
@@ -374,13 +376,25 @@ def rnn_box_train_one_epoch(model,
             temperature = _in_array[:, i, 3:4]
             static_env = _env_array[:, -5:]
             new_input = torch.cat([pred.detach(), temperature, static_env], 1)
+            
+            # predict hidden state
+            h0_pred = model.init_hidden(new_input.cpu())
+            # compute loss for the last hidden prediction
+            hidden_loss = loss_fn(h0.detach(), h0_pred)
+            
+            # predict next state with the GRU
             pred, h0 = model(new_input, h0.detach())
             loss = loss_fn(_in_array[:, i+1, :3], pred)
+            
+            # combine losses
+            loss += hidden_weight * hidden_loss
 
+            # get gradients w.r.t to parameters
             loss.backward()
             train_epoch_loss.append(loss.item())
 
             # update parameters
+            torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
             optimizer.step()
 
     train_loss = np.mean(train_epoch_loss)
@@ -396,7 +410,8 @@ def rnn_box_test(model,
                  y_scaler, 
                  output_cols, 
                  out_val, 
-                 stable_thresh = 1.0):
+                 stable_thresh = 1.0, 
+                 start_times = [0]):
     
     """ Run an RNN model in inference mode data as input
     Args:
@@ -409,6 +424,7 @@ def rnn_box_test(model,
         output_cols (List[str])
         out_val (pd.DataFrame)
         stable_thresh (float)
+        starting_time (int)
     Return:
         box_mae (float)
         scaled_box_mae (float)
@@ -417,51 +433,64 @@ def rnn_box_test(model,
     """
     
     epoch_loss = []
+    box_loss_mae = []
     
-    # use initial condition @ t = 0 and get the first prediction
-    pred_array = np.empty((len(exps), 1439, 3))
-    h0 = model.init_hidden(torch.from_numpy(in_array[:, 0, :]).float())
-    pred, h0 = model.predict(in_array[:, 0, :], h0)
-    pred_array[:, 0, :] = pred
-    loss = mean_absolute_error(in_array[:, 1, :3], pred)
-    epoch_loss.append(loss)
-
-    # use the first prediction to get the next, and so on for num_timesteps
-    for i in range(1, num_timesteps): 
-        temperature = in_array[:, i, 3:4]
-        static_env = env_array[:, -5:]
-        new_input = np.block([pred, temperature, static_env])
-        pred, h0 = model.predict(new_input, h0)
-        pred_array[:, i, :] = pred
+    for start_time in start_times:
         
-        if i < (num_timesteps-1):
-            loss = mean_absolute_error(in_array[:, i+1, :3], pred)
+        with torch.no_grad():
+            # use initial condition @ t = 0 and get the first prediction
+            pred_array = np.empty((len(exps), 1439-start_time, 3))
+            h0 = model.init_hidden(torch.from_numpy(in_array[:, start_time, :]).float())
+            pred, h0 = model.predict(in_array[:, start_time, :], h0)
+            pred_array[:, 0, :] = pred
+            loss = mean_absolute_error(in_array[:, start_time + 1, :3], pred)
             epoch_loss.append(loss)
 
-    # loop over the batch to fill up results dict
-    results_dict = {}
-    for k, exp in enumerate(exps):
-        results_dict[exp] = pd.DataFrame(y_scaler.inverse_transform(pred_array[k]), columns=output_cols[1:-1])
-        results_dict[exp]['id'] = exp
-        results_dict[exp]['Time [s]'] = out_val['Time [s]'].unique()
-        results_dict[exp] = results_dict[exp].reindex(output_cols, axis=1)
+            # use the first prediction to get the next, and so on for num_timesteps
+            for k, i in enumerate(range(start_time + 1, num_timesteps)): 
+                temperature = in_array[:, i, 3:4]
+                static_env = env_array[:, -5:]
+                new_input = np.block([pred, temperature, static_env])
+                pred, h0 = model.predict(new_input, h0)
+                pred_array[:, k+1, :] = pred
+                if i < (num_timesteps-1):
+                    loss = mean_absolute_error(in_array[:, i+1, :3], pred)
+                    epoch_loss.append(loss)
 
-    preds = pd.concat(results_dict.values())
-    truth = out_val.loc[out_val['id'].isin(exps)]
-    truth = truth.sort_values(['id', 'Time [s]']).reset_index(drop=True)
-    preds = preds.sort_values(['id', 'Time [s]']).reset_index(drop=True)
-    
-    # Check for instabilities
-    preds = preds.copy()
-    preds['Precursor [ug/m3]'] = 10**(preds['Precursor [ug/m3]'])
-    unstable = preds.groupby('id')['Precursor [ug/m3]'].apply(
-        lambda x: x[(x > stable_thresh) | (x < -stable_thresh)].any())
-    stable_exps = unstable[unstable == False].index
-    failed_exps = unstable[unstable == True].index
-    c1 = ~truth["id"].isin(failed_exps)
-    c2 = ~preds["id"].isin(failed_exps)
-    
-    box_mae = mean_absolute_error(preds[c2].iloc[:, 2:-1], truth[c1].iloc[:, 2:-1])
+        # loop over the batch to fill up results dict
+        results_dict = {}
+        for k, exp in enumerate(exps):
+            results_dict[exp] = pd.DataFrame(y_scaler.inverse_transform(pred_array[k]), columns=output_cols[1:-1])
+            results_dict[exp]['id'] = exp
+            results_dict[exp]['Time [s]'] = out_val['Time [s]'].unique()[start_time:]
+            results_dict[exp] = results_dict[exp].reindex(output_cols, axis=1)
+
+        preds = pd.concat(results_dict.values())
+        truth = out_val.loc[out_val['id'].isin(exps)]
+        truth = truth.sort_values(['id', 'Time [s]']).reset_index(drop=True)
+        preds = preds.sort_values(['id', 'Time [s]']).reset_index(drop=True)
+
+        start_time_cond = truth['Time [s]'].isin(out_val['Time [s]'].unique()[start_time:])
+        truth = truth[start_time_cond]
+
+        # Check for instabilities
+        preds = preds.copy()
+        preds['Precursor [ug/m3]'] = 10**(preds['Precursor [ug/m3]'])
+        truth['Precursor [ug/m3]'] = 10**(truth['Precursor [ug/m3]'])
+        unstable = preds.groupby('id')['Precursor [ug/m3]'].apply(
+            lambda x: x[(x > stable_thresh) | (x < -stable_thresh)].any())
+        stable_exps = unstable[unstable == False].index
+        failed_exps = unstable[unstable == True].index
+        c1 = ~truth["id"].isin(failed_exps)
+        c2 = ~preds["id"].isin(failed_exps)
+        
+        if c2.sum() == 0:
+            box_mae = 1.0
+        else:
+            box_mae = mean_absolute_error(preds[c2].iloc[:, 1:-1], truth[c1].iloc[:, 1:-1])
+        box_loss_mae.append(box_mae)
+        
+    box_mae = np.mean(box_loss_mae)
     scaled_box_mae = np.mean(epoch_loss)
     
-    return box_mae, scaled_box_mae, preds, truth
+    return scaled_box_mae, box_mae, preds, truth

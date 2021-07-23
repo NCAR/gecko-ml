@@ -65,14 +65,25 @@ model_configurations:
       verbose:  1
       classifier: False
     gru:
-      hidden_size: 577
+#       hidden_size: 577
+#       n_layers: 1
+#       lr: 2.086122304693825e-05
+#       l2_weight: 1.1416625676309304e-08
+#       rnn_dropout: 0.12413312354175367
+#       batch_size: 142
+#       epochs: 200
+#       verbose: True
+      hidden_size: 2141
       n_layers: 1
-      lr: 2.086122304693825e-05
-      l2_weight: 1.1416625676309304e-08
-      rnn_dropout: 0.12413312354175367
-      batch_size: 142
-      epochs: 200
+      lr: 4.937376589197426e-06
+      l2_weight: 2.8806645632876102e-08
+      rnn_dropout: 0.13870172805693076
+      hidden_weight: 1.4750736597225866
+      batch_size: 110
+      epochs: 250
       verbose: True
+      lr_patience: 6
+      stopping_patience: 20
   
 pbs:
   kernel: "ncar_pylib /glade/work/$USER/py37"

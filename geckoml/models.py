@@ -14,8 +14,11 @@ import xarray as xr
 import pandas as pd
 import numpy as np
 import logging
-import torch
 import os
+
+import torch.nn.init as init
+import torch.nn as nn
+import torch
 
 
 logger = logging.getLogger(__name__)
@@ -416,12 +419,31 @@ class GRUNet(torch.nn.Module):
         logger.info(
             f"The model contains {total_params} total parameters, {trainable_params} are trainable"
         )
-        
+                
         if isinstance(weights_path, str):
             if os.path.isfile(weights_path):
                 self.load_weights(weights_path)
             else:
                 logger.info(f"Failed to load model weights at {weights_path}")
+        else:
+            ## Weights initialization
+            logger.info(f"Initializing the weights for the model")
+            def _weights_init(m):
+                if isinstance(m, nn.Conv2d or nn.Linear):
+                    init.xavier_normal_(m.weight)
+                    m.bias.data.zero_()
+                elif isinstance(m, nn.GRU or nn.LSTM):
+                    for name, param in m.named_parameters():
+                        if 'bias' in name:
+                             nn.init.constant_(param, 0.0)
+                        elif 'weight_ih' in name:
+                             nn.init.kaiming_normal_(param)
+                        elif 'weight_hh' in name:
+                             nn.init.orthogonal_(param)
+                elif isinstance(m, nn.BatchNorm2d or nn.BatchNorm1d):
+                    m.weight.data.fill_(1)
+                    m.bias.data.zero_()
+            self.apply(_weights_init)
                 
         
     def load_weights(self, weights_path: str) -> None:
@@ -487,7 +509,7 @@ class GRUNet(torch.nn.Module):
         
         device = self._device() if self.device is None else self.device
         hidden = self.hidden_model(x.to(device)).unsqueeze(0)
-        hidden = torch.cat([hidden for x in range(self.n_layers)]) if self.n_layers > 1 else hidden
+        hidden = torch.cat([hidden.clone() for x in range(self.n_layers)]) if self.n_layers > 1 else hidden
         return hidden
     
     def _device(self) -> str:
