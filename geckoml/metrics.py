@@ -607,16 +607,17 @@ def fourier_analysis(preds, output_path, species, model_name):
             a_gtrend_orig = preds[c][column_name].copy()
             t_gtrend_orig = preds[c]["Time [s]"].copy()
             dt = t_gtrend_orig.iloc[1] - t_gtrend_orig.iloc[0]
+            exp_id = exp.replace("Exp", "")
 
             a_gtrend_windowed = (a_gtrend_orig-np.median(a_gtrend_orig ))*tukey( len(a_gtrend_orig) )
 
-            if exp == "Exp1601":
+            if exp == "Exp1601" or exp == "Exp1801":
                 plt.subplot(3, 2, 1 + g)
                 plt.plot( t_gtrend_orig, a_gtrend_orig, label=f'raw {name} data', c = "k"  )
                 plt.plot( t_gtrend_orig, a_gtrend_windowed, label='windowed data', c = "r"  )
                 plt.xlabel( 'secs' )
                 plt.ylabel( column_name.replace("ug_m3", "ug/m3") )
-                plt.title("Experiment 1601")
+                plt.title(f"Experiment {exp_id}")
                 plt.legend()
 
             a_gtrend_psd = abs(rfft(a_gtrend_orig ))
@@ -625,14 +626,14 @@ def fourier_analysis(preds, output_path, species, model_name):
 
             # For the PSD graph, we skip the first two points, this brings us more into a useful scale
             # those points represent the baseline (or mean), and are usually not relevant to the analysis
-            if exp == "Exp1601":
+            if exp == "Exp1601" or exp == "Exp1801":
                 plt.subplot(3, 2, 3 + g)
                 plt.plot( a_gtrend_freqs[1:], a_gtrend_psd[1:], label=f'psd raw {name} data', c = "k"  )
                 plt.plot( a_gtrend_freqs[1:], a_gtrend_psdtukey[1:], label='windowed psd', c = "r"  )
                 plt.xlabel('frequency ($sec^{-1}$)')
                 plt.ylabel('Amplitude')
                 plt.xlim([0.0, 0.00005])
-                plt.title("Experiment 1601")
+                plt.title(f"Experiment {exp_id}")
                 plt.legend()
 
             bulk[p] = a_gtrend_psdtukey[1:]

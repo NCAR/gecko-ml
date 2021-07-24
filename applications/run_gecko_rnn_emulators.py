@@ -219,7 +219,9 @@ if __name__ == '__main__':
     )
 
     # Split into training, validation, testing subsets
-    in_train, out_train, in_val, out_val, in_test, out_test = split_data(
+    # Note that the naming convention is switched around to ensure
+    # that the final 10% test split is being used to compute performance 
+    in_train, out_train, in_test, out_test, in_val, out_val = split_data(
         input_data=input_data, 
         output_data=output_data, 
         train_start=conf['train_start_exp'],
