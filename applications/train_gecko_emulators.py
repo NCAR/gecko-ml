@@ -1,8 +1,7 @@
 import sys
 sys.path.append('../')
-from geckoml.models import DenseNeuralNetwork, LongShortTermMemoryNetwork
-from geckoml.data import combine_data, split_data, reshape_data, partition_y_output, get_output_scaler, \
-    reconstruct_preds, save_metrics, save_scaler_csv
+from geckoml.models import DenseNeuralNetwork
+from geckoml.data import partition_y_output, get_output_scaler, reconstruct_preds, save_metrics, save_scaler_csv
 from sklearn.preprocessing import StandardScaler, RobustScaler, MaxAbsScaler, MinMaxScaler, QuantileTransformer
 from geckoml.metrics import ensembled_metrics, match_true_exps
 import tensorflow as tf
@@ -13,6 +12,7 @@ import argparse
 import numpy as np
 import yaml
 import os
+import s3fs
 from os.path import join
 
 
@@ -31,103 +31,70 @@ def main():
 
     # Extract config arguments and validate if necessary
     species = config['species']
-    dir_path = config['dir_path']
-    summary_file = config['summary_file']
+    path = config['dir_path']
     aggregate_bins = config['aggregate_bins']
     bin_prefix = config['bin_prefix']
     input_vars = config['input_vars']
     output_vars = config['output_vars']
     output_path = config['output_path']
     scaler_type = config['scaler_type']
-    seq_length = config['seq_length']
     ensemble_members = config["ensemble_members"]
     seed = config['random_seed']
-    # tf.random.set_seed(seed)
 
     for folder in ['models', 'plots', 'validation_data', 'metrics', 'scalers']:
         os.makedirs(join(output_path, folder), exist_ok=True)
 
-    # Load GECKO experiment data, split into ML inputs and outputs and persistence outputs
-    input_data, output_data = combine_data(dir_path, summary_file, aggregate_bins, bin_prefix,
-                                           input_vars, output_vars, species)
-
-    # Split into training, validation, testing subsets
-    in_train, out_train, in_val, out_val, in_test, out_test = split_data(
-                                                                    input_data=input_data, 
-                                                                    output_data=output_data, 
-                                                                    train_start=config['train_start_exp'],
-                                                                    train_end=config['train_end_exp'],
-                                                                    val_start=config['val_start_exp'],
-                                                                    val_end=config['val_end_exp'],
-                                                                    test_start=config['test_start_exp'],
-                                                                    test_end=config['test_end_exp'])
-
-    num_timesteps = in_train['Time [s]'].nunique()
-
-    # Rescale training and validation / testing data
-    x_scaler = scalers[scaler_type]((config['min_scale_range'], config['max_scale_range']))
-    scaled_in_train = x_scaler.fit_transform(in_train.drop(['Time [s]', 'id'], axis=1))
-    scaled_in_val = x_scaler.transform(in_val.drop(['Time [s]', 'id'], axis=1))
-
-    y_scaler = get_output_scaler(x_scaler, output_vars, scaler_type, data_range=(
-                                config['min_scale_range'], config['max_scale_range']))
-    scaled_out_train = y_scaler.transform(out_train.drop(['Time [s]', 'id'], axis=1))
-    scaled_out_val = y_scaler.transform(out_val.drop(['Time [s]', 'id'], axis=1))
-
-    scaled_in_train_ts, scaled_out_train_ts = reshape_data(scaled_in_train.copy(), scaled_out_train.copy(),
-                                                           seq_length, num_timesteps)
-    scaled_in_val_ts, scaled_out_val_ts = reshape_data(scaled_in_val.copy(), scaled_out_val.copy(),
-                                                       seq_length, num_timesteps)
+    fs = s3fs.S3FileSystem(anon=True)
+    if aggregate_bins:
+        data_type = 'agg'
+    else:
+        data_type = 'binned'
+    data = {}
+    for partition in ['train_in', 'train_out', 'val_in', 'val_out']:
+        data[partition] = pd.read_parquet(fs.open(join(path, f'{species}_{partition}_{data_type}.parquet')),
+                                          columns=input_vars).set_index(['Time [s]', 'id'])
+    num_timesteps = data["train_in"]['Time [s]'].nunique()
+    x_scaler = scalers[scaler_type]
+    scaled_in_train = x_scaler.fit_transform(data['train_in'])
+    scaled_in_val = x_scaler.transform(data['val_in'])
+    y_scaler = get_output_scaler(x_scaler, output_vars, scaler_type)
+    scaled_out_train = y_scaler.transform(data['train_out'])
+    scaled_out_val = y_scaler.transform(data['val_out'])
 
     # Train ML models and get validation metrics
-    single_ts_metrics, multi_ts_metrics = {}, {}
+    MLP_metrics = {}
     for model_type in config["model_configurations"].keys():
 
-        if model_type == 'single_ts_models':
+        if model_type == 'MLP':
 
             for model_name, model_config in config['model_configurations'][model_type].items():
 
                 y = partition_y_output(scaled_out_train, model_config['output_layers'], aggregate_bins)
-                single_ts_metrics[model_name] = {}
+                MLP_metrics[model_name] = {}
                 for member in range(ensemble_members):
 
                     mod = DenseNeuralNetwork(**model_config)
                     mod.fit(scaled_in_train, y)
                     preds = mod.predict(scaled_in_val)
-                    transformed_preds = reconstruct_preds(preds, out_val, y_scaler, ['Precursor [ug/m3]'])
-                    y_true, y_preds = match_true_exps(truth=out_val, preds=transformed_preds, 
+                    transformed_preds = reconstruct_preds(preds, data['val_out'], y_scaler, ['Precursor [ug/m3]'])
+                    y_true, y_preds = match_true_exps(truth=data['val_out'], preds=transformed_preds,
                                                       num_timesteps=num_timesteps, seq_length=1, 
                                                       aggregate_bins=aggregate_bins, bin_prefix=bin_prefix)
-                    single_ts_metrics[model_name][f'_{member}'] = ensembled_metrics(y_true, y_preds, member)
+                    MLP_metrics[model_name][f'_{member}'] = ensembled_metrics(y_true, y_preds, member)
                     mod.model.save(join(output_path, 'models', f'{species}_{model_name}_{member}'))
                 mod.save_fortran_model(join(output_path, 'models', model_name + '.nc'))
-                save_metrics(single_ts_metrics[model_name], output_path, model_name, ensemble_members, 'base')
+                save_metrics(MLP_metrics[model_name], output_path, model_name, ensemble_members, 'base')
 
-        elif model_type == 'multi_ts_models':
-
-            for model_name, model_config in config['model_configurations'][model_type].items():
-
-                y = partition_y_output(scaled_out_train_ts, model_config['output_layers'], aggregate_bins)
-                multi_ts_metrics[model_name] = {}
-                for member in range(ensemble_members):
-
-                    mod = LongShortTermMemoryNetwork(**model_config)
-                    mod.fit(scaled_in_train_ts, y)
-                    preds = mod.predict(scaled_in_val_ts)
-                    transformed_preds = reconstruct_preds(preds, out_val, y_scaler, ['Precursor [ug/m3]'], seq_length)
-                    y_true, y_preds = match_true_exps(truth=out_val, preds=transformed_preds, 
-                                                      num_timesteps=num_timesteps, seq_length=seq_length, 
-                                                      aggregate_bins=aggregate_bins, bin_prefix=bin_prefix)
-                    multi_ts_metrics[model_name][f'_{member}'] = ensembled_metrics(y_true, y_preds, member)
-                    mod.model.save(join(output_path, 'models', f'{species}_{model_name}_{member}'))
-                save_metrics(multi_ts_metrics[model_name], output_path, model_name, ensemble_members, 'base')
+        elif model_type == 'RNN':
+            continue
 
     joblib.dump(x_scaler, join(output_path, 'scalers', f'{species}_x.scaler'))
     joblib.dump(y_scaler, join(output_path, 'scalers', f'{species}_y.scaler'))
     save_scaler_csv(x_scaler, input_vars[1:-1], output_path, species, scaler_type)
-    in_train.to_parquet(join(output_path, 'validation_data', f'{species}_in_train.parquet'))
-    in_val.to_parquet(join(output_path, 'validation_data', f'{species}_in_val.parquet'))
-    out_val.to_parquet(join(output_path, 'validation_data', f'{species}_out_val.parquet'))
+    data['train_in'].to_parquet(join(output_path, 'validation_data', f'{species}_in_train.parquet'))
+    data['train_out'].to_parquet(join(output_path, 'validation_data', f'{species}_out_train.parquet'))
+    data['val_in'].to_parquet(join(output_path, 'validation_data', f'{species}_in_val.parquet'))
+    data['out_val'].to_parquet(join(output_path, 'validation_data', f'{species}_out_val.parquet'))
 
     print('Completed in {0:0.1f} seconds'.format(time.time() - start))
 
