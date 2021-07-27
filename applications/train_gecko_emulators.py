@@ -1,26 +1,23 @@
 import sys
 sys.path.append('../')
 from geckoml.models import DenseNeuralNetwork
-from geckoml.data import partition_y_output, get_output_scaler, reconstruct_preds, save_metrics, save_scaler_csv
+from geckoml.data import partition_y_output, get_output_scaler, reconstruct_preds, save_metrics, save_scaler_csv, \
+    load_data
 from sklearn.preprocessing import StandardScaler, RobustScaler, MaxAbsScaler, MinMaxScaler, QuantileTransformer
-from geckoml.metrics import ensembled_metrics, match_true_exps
-import tensorflow as tf
+from geckoml.metrics import ensembled_metrics
 import time
 import joblib
-import pandas as pd
 import argparse
-import numpy as np
 import yaml
 import os
-import s3fs
 from os.path import join
 
 
 def main():
     
     start = time.time()
-    scalers = {"MinMaxScaler": MinMaxScaler,
-               "StandardScaler": StandardScaler}
+    scalers = {"MinMaxScaler": MinMaxScaler(),
+               "StandardScaler": StandardScaler()}
     
     # read YAML config as provided arg
     parser = argparse.ArgumentParser()
@@ -36,6 +33,7 @@ def main():
     bin_prefix = config['bin_prefix']
     input_vars = config['input_vars']
     output_vars = config['output_vars']
+    log_trans_cols = config['log_trans_cols']
     output_path = config['output_path']
     scaler_type = config['scaler_type']
     ensemble_members = config["ensemble_members"]
@@ -44,16 +42,8 @@ def main():
     for folder in ['models', 'plots', 'validation_data', 'metrics', 'scalers']:
         os.makedirs(join(output_path, folder), exist_ok=True)
 
-    fs = s3fs.S3FileSystem(anon=True)
-    if aggregate_bins:
-        data_type = 'agg'
-    else:
-        data_type = 'binned'
-    data = {}
-    for partition in ['train_in', 'train_out', 'val_in', 'val_out']:
-        data[partition] = pd.read_parquet(fs.open(join(path, f'{species}_{partition}_{data_type}.parquet')),
-                                          columns=input_vars).set_index(['Time [s]', 'id'])
-    num_timesteps = data["train_in"]['Time [s]'].nunique()
+    data = load_data(path, aggregate_bins, species, input_vars, output_vars)
+
     x_scaler = scalers[scaler_type]
     scaled_in_train = x_scaler.fit_transform(data['train_in'])
     scaled_in_val = x_scaler.transform(data['val_in'])
@@ -76,11 +66,9 @@ def main():
                     mod = DenseNeuralNetwork(**model_config)
                     mod.fit(scaled_in_train, y)
                     preds = mod.predict(scaled_in_val)
-                    transformed_preds = reconstruct_preds(preds, data['val_out'], y_scaler, ['Precursor [ug/m3]'])
-                    y_true, y_preds = match_true_exps(truth=data['val_out'], preds=transformed_preds,
-                                                      num_timesteps=num_timesteps, seq_length=1, 
-                                                      aggregate_bins=aggregate_bins, bin_prefix=bin_prefix)
-                    MLP_metrics[model_name][f'_{member}'] = ensembled_metrics(y_true, y_preds, member)
+                    transformed_preds = reconstruct_preds(preds, data['val_out'], y_scaler, output_vars, log_trans_cols)
+                    MLP_metrics[model_name][f'_{member}'] = ensembled_metrics(data['val_out'],
+                                                                              transformed_preds, member, output_vars)
                     mod.model.save(join(output_path, 'models', f'{species}_{model_name}_{member}'))
                 mod.save_fortran_model(join(output_path, 'models', model_name + '.nc'))
                 save_metrics(MLP_metrics[model_name], output_path, model_name, ensemble_members, 'base')
@@ -90,11 +78,11 @@ def main():
 
     joblib.dump(x_scaler, join(output_path, 'scalers', f'{species}_x.scaler'))
     joblib.dump(y_scaler, join(output_path, 'scalers', f'{species}_y.scaler'))
-    save_scaler_csv(x_scaler, input_vars[1:-1], output_path, species, scaler_type)
+    save_scaler_csv(x_scaler, input_vars, output_path, species, scaler_type)
     data['train_in'].to_parquet(join(output_path, 'validation_data', f'{species}_in_train.parquet'))
     data['train_out'].to_parquet(join(output_path, 'validation_data', f'{species}_out_train.parquet'))
     data['val_in'].to_parquet(join(output_path, 'validation_data', f'{species}_in_val.parquet'))
-    data['out_val'].to_parquet(join(output_path, 'validation_data', f'{species}_out_val.parquet'))
+    data['val_out'].to_parquet(join(output_path, 'validation_data', f'{species}_out_val.parquet'))
 
     print('Completed in {0:0.1f} seconds'.format(time.time() - start))
 

@@ -1,4 +1,4 @@
-from sklearn.metrics import mean_squared_error, mean_absolute_error
+from sklearn.metrics import mean_squared_error, mean_absolute_error, mean_absolute_percentage_error
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -127,7 +127,7 @@ def get_stability(preds, stability_thresh):
     return stable_exps, unstable_exps
 
 
-def ensembled_metrics(y_true, y_pred, member, stability_thresh=1):
+def ensembled_metrics(y_true, y_pred, member, output_vars, stability_thresh=1):
     """ Call a variety of metrics to be calculated (Hellenger distance R2, and RMSE currently) on Box emulator results.
         If bins were not aggregated, all bins are summed before metrics are calculated.
     Args:
@@ -137,29 +137,33 @@ def ensembled_metrics(y_true, y_pred, member, stability_thresh=1):
         metrics (pd.dataframe): results for 'Precursor', 'Gas', and 'Aerosol' for a variety of metrics 
     """
     y_pred_copy = y_pred.copy()
-    for col in ['Precursor [ug/m3]', 'Gas [ug/m3]', 'Aerosol [ug_m3]']:
+    for col in output_vars:
         y_pred_copy = y_pred_copy.groupby('id').filter(
             lambda x: (x[col].max() < stability_thresh) & (x[col].min() > -stability_thresh))
 
-    stable_exps = y_pred_copy['id'].unique()
-    stable_true = y_true[y_true['id'].isin(stable_exps)]
-    n_unstable = y_true['id'].nunique() - stable_true['id'].nunique()
+    stable_exps = y_pred_copy.index.unique(level='id')
+    print('STABLE EXPS:', stable_exps)
+    stable_true = y_true.loc[y_true.index.isin(stable_exps, level='id')]
+    #stable_true = y_true[y_true['id'].isin(stable_exps)]
+    n_unstable = len(y_true.index.unique(level='id')) - len(stable_true.index.unique(level='id'))
+    print("UNSTABLE EXPS: ", n_unstable)
 
     df = pd.DataFrame(columns=['ensemble_member', 'mass_phase', 'mean_mse', 'mean_mae', 'Mean % MAE', 'mean_r2',
                                'mean_hd', 'n_val_exps', 'n_unstable'])
 
-    for col in y_true.columns[1:-1]:
+    for col in y_true.columns:
         
         l = []
         l.append(member)
         l.append(col)
         l.append(mean_squared_error(stable_true[col], y_pred_copy[col]))
         l.append(mean_absolute_error(stable_true[col], y_pred_copy[col]))
-        l.append(((stable_true[col] -  y_pred_copy[col]).abs() / stable_true[col] * 100).mean())
+        l.append(mean_absolute_percentage_error(stable_true[col], y_pred_copy[col]))
         l.append(r2_corr(stable_true[col], y_pred_copy[col]))
         l.append(hellinger_distance(stable_true[col], y_pred_copy[col]))
 
-        temp_df = pd.DataFrame(data={'t': stable_true[col].values, 'p': y_pred_copy[col].values, 'id': stable_true['id']})
+        temp_df = pd.DataFrame(data={'t': stable_true[col].values, 'p': y_pred_copy[col].values,
+                                     'id': stable_true.index.get_level_values(level='id')})
         l.append(temp_df['id'].nunique())
         l.append(n_unstable)
 
