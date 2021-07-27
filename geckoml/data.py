@@ -7,16 +7,17 @@ from sklearn.preprocessing import StandardScaler, RobustScaler, MaxAbsScaler, Mi
 scalers = {"MinMaxScaler": MinMaxScaler,
            "StandardScaler": StandardScaler}
 
-def load_data(path, aggregate_bins, species, input_columns, output_columns):
+def load_data(path, aggregate_bins, species, input_columns, output_columns, tendency_cols, log_trans_cols):
     """
 
     Args:
-        path:
-        aggregate_bins:
-        species:
-        input_columns:
-        output_columns:
-
+        path: Path to Data. Supports AWS S3 bucket paths.
+        aggregate_bins: Weather to use aggregated data or binned (by volitility) data.
+        species: Chemical species of data.
+        input_columns: Input columns to use for modeling.
+        output_columns: Output columns to model.
+        tendency_cols: Features to use tendencies instead of raw data.
+        log_trans_cols: Feature to log transform.
     Returns:
 
     """
@@ -33,7 +34,28 @@ def load_data(path, aggregate_bins, species, input_columns, output_columns):
             data[partition] = data[partition][input_columns]
         elif '_out in partition':
             data[partition] = data[partition][output_columns]
+        if tendency_cols:
+            data[partition] = get_tendencies(data[partition], tendency_cols)
+        if log_trans_cols:
+            data[partition] = log_transform(data[partition], log_trans_cols)
     return data
+
+
+def get_tendencies(df, tend_cols):
+    """
+
+    Args:
+        df: Pandas Dataframe including columns to get tendencies from
+        tend_cols: Columns to get tendencies
+
+    Returns:
+        Pandas Dataframe with tendencies of specified columns. Removes all 'Nan' rows created.
+    """
+    transformed_df = df.copy(deep=True)
+    transformed_df[tend_cols] = transformed_df[tend_cols].groupby('id').apply(lambda x: x[tend_cols].diff())
+    transformed_df = transformed_df.dropna()
+    return transformed_df
+
 
 def log_transform(dataframe, cols_to_transform):
     """
@@ -72,9 +94,8 @@ def reconstruct_preds(predictions, truth, y_scaler, output_columns, log_trans_co
     """
     preds = truth.copy(deep=True)
     preds.loc[:, output_columns] = y_scaler.inverse_transform(predictions)
-    if not log_trans_cols:
+    if log_trans_cols:
         preds.loc[:, log_trans_cols] = inverse_log_transform(preds, log_trans_cols)
-
     return preds
 
 
