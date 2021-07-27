@@ -33,6 +33,7 @@ def main():
     bin_prefix = config['bin_prefix']
     input_vars = config['input_vars']
     output_vars = config['output_vars']
+    tendency_cols = config['tendency_cols']
     log_trans_cols = config['log_trans_cols']
     output_path = config['output_path']
     scaler_type = config['scaler_type']
@@ -42,14 +43,13 @@ def main():
     for folder in ['models', 'plots', 'validation_data', 'metrics', 'scalers']:
         os.makedirs(join(output_path, folder), exist_ok=True)
 
-    data = load_data(path, aggregate_bins, species, input_vars, output_vars)
+    data = load_data(path, aggregate_bins, species, input_vars, output_vars, tendency_cols, log_trans_cols)
 
     x_scaler = scalers[scaler_type]
     scaled_in_train = x_scaler.fit_transform(data['train_in'])
     scaled_in_val = x_scaler.transform(data['val_in'])
     y_scaler = get_output_scaler(x_scaler, output_vars, scaler_type)
     scaled_out_train = y_scaler.transform(data['train_out'])
-    scaled_out_val = y_scaler.transform(data['val_out'])
 
     # Train ML models and get validation metrics
     MLP_metrics = {}
@@ -79,10 +79,9 @@ def main():
     joblib.dump(x_scaler, join(output_path, 'scalers', f'{species}_x.scaler'))
     joblib.dump(y_scaler, join(output_path, 'scalers', f'{species}_y.scaler'))
     save_scaler_csv(x_scaler, input_vars, output_path, species, scaler_type)
-    data['train_in'].to_parquet(join(output_path, 'validation_data', f'{species}_in_train.parquet'))
-    data['train_out'].to_parquet(join(output_path, 'validation_data', f'{species}_out_train.parquet'))
-    data['val_in'].to_parquet(join(output_path, 'validation_data', f'{species}_in_val.parquet'))
-    data['val_out'].to_parquet(join(output_path, 'validation_data', f'{species}_out_val.parquet'))
+
+    for key in data.keys():
+        data[key].to_parquet(join(output_path, 'validation_data', f'{species}_{key}.parquet'))
 
     print('Completed in {0:0.1f} seconds'.format(time.time() - start))
 
