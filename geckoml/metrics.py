@@ -142,16 +142,13 @@ def ensembled_metrics(y_true, y_pred, member, output_vars, stability_thresh=1):
             lambda x: (x[col].max() < stability_thresh) & (x[col].min() > -stability_thresh))
 
     stable_exps = y_pred_copy.index.unique(level='id')
-    print('STABLE EXPS:', stable_exps)
     stable_true = y_true.loc[y_true.index.isin(stable_exps, level='id')]
-    #stable_true = y_true[y_true['id'].isin(stable_exps)]
     n_unstable = len(y_true.index.unique(level='id')) - len(stable_true.index.unique(level='id'))
-    print("UNSTABLE EXPS: ", n_unstable)
 
     df = pd.DataFrame(columns=['ensemble_member', 'mass_phase', 'mean_mse', 'mean_mae', 'Mean % MAE', 'mean_r2',
                                'mean_hd', 'n_val_exps', 'n_unstable'])
 
-    for col in y_true.columns:
+    for col in y_pred.columns:
         
         l = []
         l.append(member)

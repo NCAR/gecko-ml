@@ -4,7 +4,6 @@ from tensorflow.keras.models import Model
 from tensorflow.keras.regularizers import l1, l2, l1_l2
 from tensorflow.keras.optimizers import Adam, SGD
 import tensorflow.keras.backend as K
-from keras_self_attention import SeqSelfAttention
 import tensorflow as tf
 import numpy as np
 import xarray as xr

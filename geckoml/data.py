@@ -64,7 +64,9 @@ def log_transform(dataframe, cols_to_transform):
         dataframe: full dataframe
         cols_to_transform: list of columns to perform transformation on 
     """
-    dataframe[cols_to_transform] = np.log10(dataframe[cols_to_transform])
+    for col in cols_to_transform:
+        if np.isin(col, dataframe.columns):
+            dataframe.loc[:, col] = np.log10(dataframe[col])
     return dataframe
 
 
@@ -75,7 +77,9 @@ def inverse_log_transform(dataframe, cols_to_transform):
         dataframe: full dataframe
         cols_to_transform: list of columns to perform transformation on 
     """
-    dataframe.loc[:, cols_to_transform] = 10 ** dataframe[cols_to_transform]
+    for col in cols_to_transform:
+        if np.isin(col, dataframe.columns):
+            dataframe.loc[:, col] = 10 ** dataframe[col]
     return dataframe
 
 
@@ -94,8 +98,9 @@ def reconstruct_preds(predictions, truth, y_scaler, output_columns, log_trans_co
     """
     preds = truth.copy(deep=True)
     preds.loc[:, output_columns] = y_scaler.inverse_transform(predictions)
-    if log_trans_cols:
-        preds.loc[:, log_trans_cols] = inverse_log_transform(preds, log_trans_cols)
+    for col in log_trans_cols:
+        if np.isin(col, preds.columns):
+            preds.loc[:, col] = inverse_log_transform(preds, col)
     return preds
 
 
@@ -164,7 +169,8 @@ def partition_y_output(y, output_layers, aggregate_bins=True):
         if not aggregate_bins:
             data = [y[:, 0].reshape(-1, 1), y[:, 1:].reshape(-1, 28)]
         else:
-            data = [y[:, 0].reshape(-1, 1), y[:, 1:].reshape(-1, 2)]
+            # data = [y[:, 0].reshape(-1, 1), y[:, 1:].reshape(-1, 2)]
+            data = [y[:, 0].reshape(-1, 1), y[:, 1:].reshape(-1, 1)]
     elif output_layers == 1:
         data = [y]
     return data
