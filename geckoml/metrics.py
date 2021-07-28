@@ -108,7 +108,7 @@ def get_outliers(preds, truth, cols, n_extremes=10):
 
     return best_exps, worst_exps
 
-def get_stability(preds, stability_thresh):
+def get_stability(preds, stability_thresh, output_cols):
     """
     Determine if any value has crossed the positive or negative magnitude of threshold and lable unstable if true
     Args:
@@ -119,7 +119,7 @@ def get_stability(preds, stability_thresh):
         stable_exps (list)
         unstable_exps (list)
     """
-    unstable = preds.groupby('id')['Precursor [ug/m3]'].apply(
+    unstable = preds.groupby('id')[output_cols].apply(
         lambda x: x[(x > stability_thresh) | (x < -stability_thresh)].any())
     stable_exps = unstable[unstable == False].index
     unstable_exps = unstable[unstable == True].index
@@ -196,7 +196,7 @@ def match_true_exps(truth, preds, num_timesteps, seq_length, aggregate_bins, bin
     return true_sub, preds
 
 
-def plot_ensemble(truth, preds, output_path, species, model_name):
+def plot_ensemble(truth, preds, output_path, output_vars, species, model_name):
     """ Plot ensemble members, ensemble mean, and truth from 3 randomly selected experiments.
     Args:
         truth: Validation dataframe for selected experiments
@@ -205,33 +205,32 @@ def plot_ensemble(truth, preds, output_path, species, model_name):
         species: Species (from config) used for labeling
         model_name: Model Name (used for labeling)
     """
-    all_exps = truth['id'].unique()
+    all_exps = truth.index.unique(level='id')
     exps = np.random.choice(all_exps, 3, replace=False)
     color = ['r', 'b', 'g']
-    mean_ensemble = pd.concat([x for x in preds.values()]).groupby(level=0).mean()
-    mean_ensemble['id'] = truth['id']
-    fig, axes = plt.subplots(3, 3, figsize=(20, 16), sharex='col', sharey='row',
+    mean_ensemble = preds.groupby(['Time [s]', 'id']).mean()[output_vars]
+    fig, axes = plt.subplots(len(output_vars), 3, figsize=(20, 16), sharex='col', sharey='row',
                              gridspec_kw={'hspace': 0, 'wspace': 0})
     fig.suptitle('Ensemble Runs - {} - {}'.format(species, model_name), fontsize=30)
+    t_sub = truth[truth['member'] == 0]
 
-    for i in range(3):
-        for j in range(3):
-            t = truth[truth['id'] == exps[j]].iloc[:, i + 1].values
-            axes[i, j].plot(t, linestyle='--', color='k', linewidth=2, label='True')
-            if i == 0:
-                axes[i, j].set_title(exps[j], fontsize=22)
+    for i, exp in enumerate(exps):
+        for j, var in enumerate(output_vars):
+            t = t_sub.loc[t_sub.index.get_level_values('id') == exp, var].values
+            axes[j, i].plot(t, linestyle='--', color='k', linewidth=2, label='True')
             if j == 0:
-                axes[i, j].set_ylabel(truth.columns[i+1], fontsize=20)
-            dummy_i = 0
-            for key, value in preds.items():
-                p = preds[key][preds[key]['id'] == exps[j]].iloc[:, i + 1].values
-                if dummy_i == 0:
-                    axes[i, j].plot(p, linewidth=0.3, color=color[j], label='Ensemble Member')
+                axes[j, i].set_title(exp, fontsize=22)
+            if i == 0:
+                axes[j, i].set_ylabel(var, fontsize=20)
+            for member in preds['member'].unique():
+                p = preds.loc[preds['member'] == member]
+                p_sub = p.loc[p.index.get_level_values('id') == exp, var].values
+                if member == 0:
+                    axes[j, i].plot(p_sub, linewidth=0.3, color=color[j], label='Ensemble Member')
                 else:
-                    axes[i, j].plot(p, linewidth=0.3, color=color[j], label='')
-                dummy_i += 1
-            m = mean_ensemble[mean_ensemble['id'] == exps[j]].iloc[:, i + 1].values
-            axes[i, j].plot(m, color=color[j], linewidth=2, label='Ensemble Mean')
+                    axes[j, i].plot(p_sub, linewidth=0.3, color=color[j], label='')
+            m = mean_ensemble.loc[mean_ensemble.index.get_level_values('id') == exp, var].values
+            axes[j, i].plot(m, color=color[j], linewidth=2, label='Ensemble Mean')
     for i in range(3):
         axes[0, i].legend()
 
@@ -298,7 +297,7 @@ def plot_bootstrap_ci(truth, preds, columns, output_path, species, model_name, n
 
        """
     if only_stable:
-        stable_exps = get_stability(preds, stable_thresh)[0]
+        stable_exps = get_stability(preds, stable_thresh, columns)[0]
         truth = truth[truth['id'].isin(stable_exps)]
         preds = preds[preds['id'].isin(stable_exps)]
         truth = truth[truth['member'] == 0]
@@ -437,7 +436,7 @@ def plot_crps_bootstrap(truth, preds, columns, output_path, species, model_name,
     Returns:
     """
     if only_stable:
-        stable_exps = get_stability(preds, stable_thresh)[0]
+        stable_exps = get_stability(preds, stable_thresh, columns)[0]
         truth = truth[truth['id'].isin(stable_exps)]
         preds = preds[preds['id'].isin(stable_exps)]
 
@@ -557,3 +556,15 @@ def plot_scatter_analysis(preds, truth, train, val, cols, output_path, species, 
     cb.set_label(label=hue, weight='bold', size=24)
     plt.suptitle(f'{species.capitalize()} - {model_name.upper()}', fontsize=50, y=1.08)
     plt.savefig(join(output_path, f'plots/scatter_analysis_{model_name}_{species}.png'), bbox_inches='tight')
+
+
+def save_analysis_plots(all_truth, all_preds, train_input, val_input, output_path, output_vars, species, model_name):
+
+    plot_ensemble(all_truth, all_preds, output_path, output_vars, species, model_name)
+    all_truth.reset_index(inplace=True)
+    all_preds.reset_index(inplace=True)
+    plot_bootstrap_ci(all_truth, all_preds, output_vars, output_path, species, model_name)
+    plot_crps_bootstrap(all_truth, all_preds, output_vars, output_path, species, model_name)
+    plot_unstability(all_preds, output_vars, output_path, model_name)
+    plot_scatter_analysis(all_preds, all_truth, train_input, val_input, output_vars,
+                          output_path, species, model_name)
