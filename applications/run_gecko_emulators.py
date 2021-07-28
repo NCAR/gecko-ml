@@ -6,9 +6,8 @@ import yaml
 import time
 import joblib
 from geckoml.box import GeckoBoxEmulator
-from geckoml.metrics import ensembled_metrics, match_true_exps, plot_ensemble, plot_bootstrap_ci, \
-    plot_crps_bootstrap, plot_unstability, plot_scatter_analysis
-from geckoml.data import inverse_log_transform, save_metrics
+from geckoml.metrics import ensembled_metrics, save_analysis_plots
+from geckoml.data import save_metrics
 from os.path import join
 
 
@@ -53,18 +52,13 @@ def main():
                     truth[model_name + f'_{member}'] = y_true
                     predictions[model_name + f'_{member}'] = y_preds
 
-                # plot_ensemble(truth=y_true, preds=predictions, output_path=output_path,
-                #               species=species, model_name=model_name)
                 all_preds = pd.concat(predictions.values())
                 all_truth = pd.concat(truth.values())
                 all_preds.to_parquet(join(output_path, f'metrics/{species}_{model_name}_preds.parquet'))
                 all_truth.to_parquet(join(output_path, f'metrics/{species}_{model_name}_truth.parquet'))
                 save_metrics(metrics[model_name], output_path, model_name, ensemble_members, 'box')
-                # plot_bootstrap_ci(all_truth, all_preds, columns, output_path, species, model_name)
-                # plot_crps_bootstrap(all_truth, all_preds, columns, output_path, species, model_name)
-                # plot_unstability(all_preds, columns, output_path, model_name)
-                # plot_scatter_analysis(all_preds, all_truth, data["train_in"], data["val_in"], columns[1:],
-                #                       output_path, species, model_name)
+                save_analysis_plots(all_truth, all_preds, data["train_in"], data["val_in"], output_path,
+                                    output_cols, species, model_name)
 
         elif model_type == 'RNN':
             continue
