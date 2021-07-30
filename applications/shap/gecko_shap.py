@@ -596,28 +596,46 @@ if __name__ == '__main__':
     input_cols = conf['input_vars']
     output_cols = conf['output_vars']
     columns = ['Precursor [ug/m3]', 'Gas [ug/m3]', 'Aerosol [ug_m3]']
-
+        
     # Load the data
-    try:
+    if os.path.isfile(join(output_path, 'validation_data', f'{species}_in_train.parquet')): 
         in_train = pd.read_parquet(join(output_path, 'validation_data', f'{species}_in_train.parquet'))
         out_train = pd.read_parquet(join(output_path, 'validation_data', f'{species}_out_train.parquet'))
         in_val = pd.read_parquet(join(output_path, 'validation_data', f'{species}_in_val.parquet'))
-    except:
-        in_train = pd.read_csv(f'/glade/scratch/cbecker/gecko_data/{species}_train_in_agg.csv')
-        out_train = pd.read_csv(f'/glade/scratch/cbecker/gecko_data/{species}_train_out_agg.csv')
-        in_val = pd.read_csv(f'/glade/scratch/cbecker/gecko_data/{species}_val_in_agg.csv')
-        out_val = pd.read_csv(f'/glade/scratch/cbecker/gecko_data/{species}_val_out_agg.csv')
-        in_train = in_train.drop(columns = [x for x in in_train.columns if x == "Unnamed: 0"])
-        out_train = out_train.drop(columns = [x for x in out_train.columns if x == "Unnamed: 0"])
-        in_val = in_val.drop(columns = [x for x in in_val.columns if x == "Unnamed: 0"])
-        out_val = out_val.drop(columns = [x for x in out_val.columns if x == "Unnamed: 0"])
+    else: 
+        # Load GECKO experiment data, split into ML inputs and outputs and persistence outputs
+        input_data, output_data = combine_data(
+            dir_path, 
+            summary_file, 
+            aggregate_bins, 
+            bin_prefix, 
+            input_vars, 
+            output_vars, 
+            species
+        )
+
+        # Split into training, validation, testing subsets
+        in_train, out_train, in_val, out_val, in_test, out_test = split_data(
+            input_data=input_data, 
+            output_data=output_data, 
+            train_start=conf['train_start_exp'],
+            train_end=conf['train_end_exp'],
+            val_start=conf['val_start_exp'],
+            val_end=conf['val_end_exp'],
+            test_start=conf['test_start_exp'],
+            test_end=conf['test_end_exp']
+        )
 
     num_timesteps = in_train['Time [s]'].nunique()
 
-    try:
-        x_scaler = joblib.load(join(output_path, 'scalers', f'{species}_x.scaler'))
-        y_scaler = joblib.load(join(output_path, 'scalers', f'{species}_y.scaler'))
-    except:
+    x_scaler_path_fn = sorted(glob.glob(os.path.join(output_path, 'scalers/*x.scaler')))
+    if len(x_scaler_path_fn) > 0:
+        # Rescale training and validation / testing data
+        x_scaler_path = x_scaler_path_fn[0]
+        y_scaler_path = x_scaler_path.replace("x.scaler", "y.scaler")
+        x_scaler = joblib.load(x_scaler_path)
+        y_scaler = joblib.load(y_scaler_path)
+    else:
         # Rescale training and validation / testing data
         scalers = {"MinMaxScaler": MinMaxScaler, "StandardScaler": StandardScaler}
         scaler_type = conf['scaler_type']

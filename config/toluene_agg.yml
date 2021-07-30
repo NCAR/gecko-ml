@@ -64,28 +64,6 @@ model_configurations:
       decay: 0.00001
       verbose:  1
       classifier: False
-#     gru:
-#       hidden_size: 3264
-#       n_layers: 1
-#       lr: 2.090681853246855e-05
-#       l2_weight: 6.53154661748469e-08
-#       rnn_dropout: 0.03529729403043094
-#       batch_size: 503
-#       epochs: 200
-#       verbose: True
-    gru:
-      hidden_size: 2141
-      n_layers: 1
-      lr: 4.937376589197426e-06
-      l2_weight: 2.8806645632876102e-08
-      rnn_dropout: 0.13870172805693076
-      hidden_weight: 1.4750736597225866
-      batch_size: 110
-      epochs: 250
-      verbose: True
-      lr_patience: 6
-      stopping_patience: 20
-      member: 0
   
 pbs:
   kernel: "ncar_pylib /glade/work/$USER/py37"
