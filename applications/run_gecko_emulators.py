@@ -7,7 +7,7 @@ import time
 import joblib
 from geckoml.box import GeckoBoxEmulator, GeckoBoxEmulatorTS
 from geckoml.metrics import ensembled_metrics, match_true_exps, plot_ensemble, plot_bootstrap_ci, \
-    plot_crps_bootstrap, plot_unstability, plot_scatter_analysis
+    plot_crps_bootstrap, plot_unstability, plot_scatter_analysis, fourier_analysis
 from geckoml.data import inverse_log_transform, save_metrics
 from dask.distributed import Client, LocalCluster
 from os.path import join
@@ -86,6 +86,7 @@ def main():
                 plot_unstability(all_preds, columns, output_path, model_name)
                 plot_scatter_analysis(all_preds, all_truth, train_in, val_in, columns[1:],
                                       output_path, species, model_name)
+                fourier_analysis(all_preds, output_path, species, model_name)
 
         elif model_type == 'multi_ts_models':
             for model_name in config['model_configurations'][model_type].keys():
