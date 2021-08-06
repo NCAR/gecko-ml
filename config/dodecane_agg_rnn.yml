@@ -37,32 +37,18 @@ output_vars: [
     'id']
 model_configurations:
   single_ts_models:
-    dnn_1:
-      hidden_layers: 1
-      hidden_neurons: 500
-      activation: "leaky"
-      output_layers: 1
-      output_activation: "linear"
-      optimizer: "adam"
-      loss: ["mae"]
-      loss_weights: [1]
-      lr: 0.00001
-      batch_size: 8192
-      use_noise: False
-      noise_sd: 0.01
-      epochs: 100
-      use_dropout: False
-      dropout_alpha: 0.1
-      kernel_reg: 'l2'
-      l1_weight: 0.001
-      l2_weight: 0.00001
-      sgd_momentum: 0.9
-      adam_beta_1: 0.9
-      adam_beta_2: 0.999
-      epsilon: 0.0000001
-      decay: 0
-      verbose:  1
-      classifier: False
+    gru:
+      hidden_size: 2141
+      n_layers: 1
+      lr: 4.937376589197426e-06
+      l2_weight: 2.8806645632876102e-08
+      rnn_dropout: 0.13870172805693076
+      hidden_weight: 1.4750736597225866
+      batch_size: 110
+      epochs: 250
+      verbose: True
+      lr_patience: 6
+      stopping_patience: 20
       
 #  multi_ts_models:
 #    lstm_1:
