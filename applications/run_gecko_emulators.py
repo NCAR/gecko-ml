@@ -4,10 +4,9 @@ import argparse
 import pandas as pd
 import yaml
 import time
-import joblib
 from geckoml.box import GeckoBoxEmulator
 from geckoml.metrics import ensembled_metrics, save_analysis_plots
-from geckoml.data import save_metrics
+from geckoml.data import save_metrics, load_data, transform_data, inv_transform_preds
 from os.path import join
 
 
@@ -23,18 +22,20 @@ def main():
         config = yaml.load(config_file)
 
     species = config['species']
+    aggregate_bins = config['aggregate_bins']
+    data_path = config['dir_path']
     output_path = config['output_path']
     exps = config['box_val_exps']
-    input_cols = config['input_vars']
-    output_cols = config['output_vars']
+    input_vars = config['input_vars']
+    output_vars = config['output_vars']
+    tendency_cols = config['tendency_cols']
+    log_trans_cols = config['log_trans_cols']
     ensemble_members = config['ensemble_members']
+    scaler_type = config['scaler_type']
 
-    data = {}
-    for key in ['train_in', 'train_out', 'val_in', 'val_out']:
-        data[key] = pd.read_parquet(join(output_path, 'validation_data', f'{species}_{key}.parquet'))
-
-    x_scaler = joblib.load(join(output_path, 'scalers', f'{species}_x.scaler'))
-    y_scaler = joblib.load(join(output_path, 'scalers', f'{species}_y.scaler'))
+    data = load_data(data_path, aggregate_bins, species, input_vars, output_vars)
+    transformed_data, x_scaler, y_scaler = transform_data(data, output_path, species, tendency_cols, log_trans_cols,
+                                                          scaler_type, output_vars, train=False)
 
     metrics = {}
     for model_type in config["model_configurations"].keys():
@@ -43,14 +44,26 @@ def main():
                 metrics[model_name], predictions, truth = {}, {}, {}
                 for member in range(ensemble_members):
                     nnet_path = join(output_path, 'models', f'{species}_{model_name}_{member}')
-                    mod = GeckoBoxEmulator(neural_net_path=nnet_path, input_scaler=x_scaler, output_scaler=y_scaler,
-                                           input_cols=input_cols, output_cols=output_cols)
-                    y_true, y_preds = mod.run_box_simulation(val_data=data['val_in'], exps=exps)
-                    metrics[model_name][f'member_{member}'] = ensembled_metrics(y_true, y_preds, member, output_cols)
-                    y_preds['member'] = member
-                    y_true['member'] = member
-                    truth[model_name + f'_{member}'] = y_true
-                    predictions[model_name + f'_{member}'] = y_preds
+                    mod = GeckoBoxEmulator(neural_net_path=nnet_path,
+                                           input_cols=input_vars,
+                                           output_cols=output_vars)
+                    true_sub, preds = mod.run_box_simulation(raw_val_output=data['val_out'],
+                                                             transformed_val_input=transformed_data['val_in'],
+                                                             exps=exps)
+
+                    transformed_preds = inv_transform_preds(preds=preds,
+                                                            truth=transformed_data["val_out"],
+                                                            y_scaler=y_scaler,
+                                                            log_trans_cols=log_trans_cols,
+                                                            tendency_cols=tendency_cols)
+                    metrics[model_name][f'member_{member}'] = ensembled_metrics(y_true=true_sub,
+                                                                                y_pred=transformed_preds,
+                                                                                member=member,
+                                                                                output_vars=output_vars)
+                    transformed_preds['member'] = member
+                    true_sub['member'] = member
+                    truth[model_name + f'_{member}'] = true_sub
+                    predictions[model_name + f'_{member}'] = transformed_preds
 
                 all_preds = pd.concat(predictions.values())
                 all_truth = pd.concat(truth.values())
@@ -58,7 +71,7 @@ def main():
                 all_truth.to_parquet(join(output_path, f'metrics/{species}_{model_name}_truth.parquet'))
                 save_metrics(metrics[model_name], output_path, model_name, ensemble_members, 'box')
                 save_analysis_plots(all_truth, all_preds, data["train_in"], data["val_in"], output_path,
-                                    output_cols, species, model_name)
+                                    output_vars, species, model_name)
 
         elif model_type == 'RNN':
             continue
