@@ -2,12 +2,13 @@ import numpy as np
 import pandas as pd
 from os.path import join
 import s3fs
+import joblib
 from sklearn.preprocessing import StandardScaler, RobustScaler, MaxAbsScaler, MinMaxScaler
 
 scalers = {"MinMaxScaler": MinMaxScaler,
            "StandardScaler": StandardScaler}
 
-def load_data(path, aggregate_bins, species, input_columns, output_columns, tendency_cols, log_trans_cols):
+def load_data(path, aggregate_bins, species, input_columns, output_columns):
     """
 
     Args:
@@ -16,8 +17,7 @@ def load_data(path, aggregate_bins, species, input_columns, output_columns, tend
         species: Chemical species of data.
         input_columns: Input columns to use for modeling.
         output_columns: Output columns to model.
-        tendency_cols: Features to use tendencies instead of raw data.
-        log_trans_cols: Feature to log transform.
+
     Returns:
 
     """
@@ -28,17 +28,54 @@ def load_data(path, aggregate_bins, species, input_columns, output_columns, tend
         data_type = 'binned'
     data = {}
     for partition in ['train_in', 'train_out', 'val_in', 'val_out']:
-        data[partition] = pd.read_parquet(fs.open(join(path, f'{species}_{partition}_{data_type}.parquet'))) \
-            .set_index(['Time [s]', 'id'])
+        if 'AWS:' in path:
+            aws_path = path.split('AWS:')[-1]
+            data[partition] = pd.read_parquet(fs.open(join(aws_path, f'{species}_{partition}_{data_type}.parquet'))) \
+                .set_index(['Time [s]', 'id'])
+        else:
+            data[partition] = pd.read_parquet(join(path, f'{species}_{partition}_{data_type}.parquet')) \
+                .set_index(['Time [s]', 'id'])
         if '_in' in partition:
             data[partition] = data[partition][input_columns]
         elif '_out in partition':
             data[partition] = data[partition][output_columns]
-        if tendency_cols:
-            data[partition] = get_tendencies(data[partition], tendency_cols)
-        if log_trans_cols:
-            data[partition] = log_transform(data[partition], log_trans_cols)
+
     return data
+
+
+def transform_data(data, out_path, species, tendency_cols, log_trans_cols, scaler_type, output_vars, train=False):
+    """
+    Transform and scale data for input into Neural network
+    Args:
+        data: Loaded dataframes of select species.
+        tendency_cols:  Features to use tendencies instead of raw data.
+        log_trans_cols: Feature to log transform.
+        scaler_type: Type of sklearn scaler object
+    Returns:
+        numpy array of transformed and scaled data.
+    """
+    transformed_data = {}
+    partitions = ['train_in', 'train_out', 'val_in', 'val_out']
+    for p in partitions:
+
+        transformed_data[p] = get_tendencies(data[p], tendency_cols)
+        transformed_data[p] = log_transform(transformed_data[p], log_trans_cols)
+
+    if train:
+        x_scaler = scalers[scaler_type]()
+        transformed_data['train_in'].loc[:] = x_scaler.fit_transform(transformed_data['train_in'])
+        y_scaler = get_output_scaler(x_scaler, output_vars, scaler_type)
+
+    else:
+        x_scaler = joblib.load(join(out_path, 'models', f'{species}_x.scaler'))
+        y_scaler = joblib.load(join(out_path, 'models', f'{species}_y.scaler'))
+        transformed_data['train_in'].loc[:] = x_scaler.transform(transformed_data['train_in'])
+
+    transformed_data['train_out'].loc[:] = y_scaler.transform(transformed_data['train_out'])
+    transformed_data['val_in'].loc[:] = x_scaler.transform(transformed_data['val_in'])
+    transformed_data['val_out'].loc[:] = y_scaler.transform(transformed_data['val_out'])
+
+    return transformed_data, x_scaler, y_scaler
 
 
 def get_tendencies(df, tend_cols):
@@ -83,24 +120,31 @@ def inverse_log_transform(dataframe, cols_to_transform):
     return dataframe
 
 
-def reconstruct_preds(predictions, truth, y_scaler, output_columns, log_trans_cols):
+def inv_transform_preds(preds, truth, y_scaler, log_trans_cols, tendency_cols):
     """
     Reconstruct model predictions into matching dataframe against truth
     Args:
          predictions: np.array of model predictions
          truth: pandas dataframe of truth values (including time and experiment number)
          y_scaler: outjput scaler object
-         seq_len: list of output columns of model
          log_trans_cols: list of columns to transform from base 10 log transformations
 
     Returns:
          transformed pandas dataframe of predictions including time and experiment numbers
     """
-    preds = truth.copy(deep=True)
-    preds.loc[:, output_columns] = y_scaler.inverse_transform(predictions)
+    preds.loc[:] = y_scaler.inverse_transform(preds)
     for col in log_trans_cols:
         if np.isin(col, preds.columns):
             preds.loc[:, col] = inverse_log_transform(preds, col)
+    # if tendency_cols:
+    #     first_time_step = truth.index.get_level_values('Time [s]').min()
+    #     for col in tendency_cols:
+    #         if np.isin(col, preds_df.columns):
+    #             preds_df_tend.loc[preds_df_tend.index.get_level_values(
+    #                 'Time [s]') > first_time_step, col] = preds_df[col].values
+    #     return preds_df_tend.groupby('id').cumsum()
+    #
+    # else:
     return preds
 
 
@@ -144,7 +188,7 @@ def save_scaler_csv(scaler_obj, input_columns, output_path, species, scaler_type
     elif scaler_type == 'MinMaxScaler':
         input_scaler_df = pd.DataFrame({"min": scaler_obj.min_, "scale": scaler_obj.scale_},
                                        index=input_columns)
-    input_scaler_df.to_csv(join(output_path, f'scalers/{species}_scale_values.csv'), index_label="input")
+    input_scaler_df.to_csv(join(output_path, f'models/{species}_scale_values.csv'), index_label="input")
     return
 
 
