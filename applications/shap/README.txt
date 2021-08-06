@@ -1,10 +1,8 @@
 Files included:
 
 1. gecko_shap.py
-2. summary.ipynb
-3. call.sh
-4. pbs_launch.sh
-5. launch_workers.sh
+2. call.sh
+3. summary.ipynb
 
 1. 
 The script gecko_shap.py will compute Shapley values for the Gecko models.
@@ -27,24 +25,11 @@ If you plan to use 10 nodes, the worker option would range from 0 to 9
 for the 10 jobs that get submitted. 
 
 2. 
+The script call.sh is an example demonstrating usage with the MLP and GRU models.
+
+3. 
 The notebook summary.ipynb will create a figure showing the bulk SHAP
 values for a molecule, and a figure comparing three experiments.
 
-3. 
-The script call.sh exemplifies how to call gecko_shap.py for different 
-molecules and models.
-
-### Multi-node options
-
-4. 
-The script pbs_launch.sh shows a submission script using 10 nodes. 
-Edit the relevant fields in the script to toggle the number of workers,
-and set the parser options for gecko_shap.py.
-
-5. 
-The script launch_workers.sh will submit N workers, where the number of workers
-should be set to the number specified in pbs_launch.sh. launch_workers will create 
-copies of pbs_launch.sh, update the worker field, and submit the job. 
-
-For example, if you set workers=10 in pbs_launch.sh, in launch_workers.sh ensure
-the for loop runs over {0..9} (e.g. workers -1).
+If you use more than 1 worker, wait until all are finished before
+computing summary figures with the notebook.

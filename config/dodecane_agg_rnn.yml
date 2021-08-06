@@ -1,0 +1,88 @@
+species: 'dodecane'
+dir_path: '/glade/p/cisl/aiml/gecko/ML2019_dodecane_postproc/'
+output_path: '/glade/work/cbecker/dodecane_agg_runs'
+summary_file: 'C02000_Exp_List_ML2019_dodecane_v1_LatinHyperCube.csv'
+aggregate_bins: True
+ensemble_members: 3 # set to 1 for a single run
+seq_length: 20 # only used with recurrent networks
+scaler_type: "StandardScaler"
+min_scale_range: 0
+max_scale_range: 1
+bin_prefix: ['Gas [ug/m3]', 'Aerosol [ug_m3]']
+train_start_exp: 0
+train_end_exp: 1599
+val_start_exp: 1600
+val_end_exp: 1799
+test_start_exp: 1800
+test_end_exp: 1999
+box_val_exps: 'all'
+random_seed: 8886
+input_vars: [
+    'Time [s]',
+    'Precursor [ug/m3]',
+    'Gas [ug/m3]',
+    'Aerosol [ug_m3]',
+    'temperature (K)',
+    'solar zenith angle (degree)',
+    'pre-existing aerosols (ug/m3)',
+    'o3 (ppb)',
+    'nox (ppb)',
+    'oh (10^6 molec/cm3)',
+    'id']
+output_vars: [
+    'Time [s]',
+    'Precursor [ug/m3]',
+    'Gas [ug/m3]',
+    'Aerosol [ug_m3]',
+    'id']
+model_configurations:
+  single_ts_models:
+    gru:
+      hidden_size: 2141
+      n_layers: 1
+      lr: 4.937376589197426e-06
+      l2_weight: 2.8806645632876102e-08
+      rnn_dropout: 0.13870172805693076
+      hidden_weight: 1.4750736597225866
+      batch_size: 110
+      epochs: 250
+      verbose: True
+      lr_patience: 6
+      stopping_patience: 20
+      
+#  multi_ts_models:
+#    lstm_1:
+#      hidden_layers: 1
+#      hidden_neurons: 100
+#      activation: "tanh"
+#      output_layers: 3
+#      output_activation: "tanh"
+#      optimizer: "adam"
+#      loss: [ "mae", "mse", "mse" ]
+#      loss_weights: [ 1, 20, 50 ]
+#      lr: 0.00005
+#      batch_size: 2048
+#      use_noise: False
+#      noise_sd: 0.01
+#      epochs: 5
+#      use_dropout: False
+#      dropout_alpha: 0.1
+#      l2_weight: 0.001
+#      sgd_momentum: 0.9
+#      adam_beta_1: 0.9
+#      adam_beta_2: 0.999
+#      epsilon: 0.0000001
+#      decay: 0
+#      verbose: 1
+#      classifier: False
+  
+pbs:
+  kernel: "ncar_pylib /glade/work/$USER/py37"
+  bash: ["module load ncarenv/1.3 gnu/8.3.0 openmpi/3.1.4 python/3.7.5 cuda cudnn"]
+  batch:
+    N: "dode-gru"
+    l: ["select=1:ncpus=8:ngpus=1:mem=128GB", "walltime=12:00:00", "gpu_type=v100"]
+    A: "NAML0001"
+    q: "casper"
+    o: "/glade/work/schreck/repos/GECKO_OPT/clean/gecko-ml/applications/test/out"
+    e: "/glade/work/schreck/repos/GECKO_OPT/clean/gecko-ml/applications/test/err"
