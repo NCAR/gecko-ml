@@ -143,13 +143,15 @@ def ensembled_metrics(y_true, y_pred, member, output_vars, stability_thresh=1):
 
     stable_exps = y_pred_copy.index.unique(level='id')
     stable_true = y_true.loc[y_true.index.isin(stable_exps, level='id')]
+    if len(stable_true.index.unique(level='id')) == 0:
+        raise ValueError('No stable experiments to calculate metrics on! Aborting.')
     n_unstable = len(y_true.index.unique(level='id')) - len(stable_true.index.unique(level='id'))
 
     df = pd.DataFrame(columns=['ensemble_member', 'mass_phase', 'mean_mse', 'mean_mae', 'Mean % MAE', 'mean_r2',
                                'mean_hd', 'n_val_exps', 'n_unstable'])
 
     for col in y_pred.columns:
-        
+
         l = []
         l.append(member)
         l.append(col)
@@ -165,7 +167,6 @@ def ensembled_metrics(y_true, y_pred, member, output_vars, stability_thresh=1):
         l.append(n_unstable)
 
         df = df.append(pd.DataFrame([l], columns=df.columns))
-
     return df
 
 
