@@ -1,0 +1,69 @@
+species: 'tolueneX10'
+dir_path: '/glade/p/cisl/aiml/gecko/partition_data'
+output_path: '/glade/work/cbecker/ECHO_tolueneX10/'
+aggregate_bins: True
+scaler_type: "StandardScaler"
+bin_prefix: ['Gas [ug/m3]', 'Aerosol [ug_m3]']
+box_val_exps: 'all'
+random_seed: 8886
+input_vars: [
+    'Precursor [ug/m3]',
+    'Gas [ug/m3]',
+    'Aerosol [ug_m3]',
+    'temperature (K)',
+    'solar zenith angle (degree)',
+    'pre-existing aerosols (ug/m3)',
+    'o3 (ppb)',
+    'nox (ppb)',
+    'oh (10^6 molec/cm3)']
+output_vars: [
+    'Gas [ug/m3]',
+    'Aerosol [ug_m3]']
+log_trans_cols: ['Precursor [ug/m3]']
+tendency_cols: []
+
+MLP:
+  hidden_layers: 1
+  hidden_neurons: 128
+  activation: "leaky"
+  output_layers: 1
+  output_activation: "linear"
+  optimizer: "adam"
+  loss: ["mae"]
+  loss_weights: [1]
+  lr: 0.0001
+  batch_size: 8192
+  use_noise: False
+  noise_sd: 0.01
+  epochs: 100
+  use_dropout: False
+  dropout_alpha: 0.1
+  kernel_reg: 'l1_l2'
+  l1_weight: 0.00001
+  l2_weight: 0.00001
+  sgd_momentum: 0.9
+  adam_beta_1: 0.9
+  adam_beta_2: 0.999
+  epsilon: 0.0000001
+  decay: 0
+  verbose: 0
+  classifier: False
+callbacks:
+#  ModelCheckpoint:
+#    monitor: "val_loss"
+#    filepath: "examples/keras/results/model.h5"
+#    save_best_only: True
+#    save_weights_only: True
+#  EarlyStopping:
+#    monitor: "val_loss"
+#    patience: 4
+#  ReduceLROnPlateau:
+#    monitor: "val_loss"
+#    factor: 0.2
+#    patience: 1
+#    min_lr: 0.0000001
+#    mode: "auto"
+#  CSVLogger:
+#    filename: "examples/keras/results/training.txt"
+#    separator: " "
+#    append: True

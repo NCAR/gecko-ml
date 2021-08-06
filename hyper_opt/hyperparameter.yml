@@ -1,0 +1,103 @@
+log:
+  save_path: '/glade/work/cbecker/ECHO_tolueneX10/'
+
+slurm:
+  jobs: 4
+  kernel: "conda activate gecko"
+  bash: ["module load cuda/11 cudnn"]
+  batch:
+    account: "NAML0001"
+    gres: "gpu:v100:1"
+    mem: "64G"
+    x: "casper36"
+    n: 8
+    t: "1:00:00"
+    J: "gecko"
+    o: "hyper_opt.out"
+    e: "hyper_opt.err"
+    
+optuna:
+  name: "gecko-charlie_tolueneX10.db"
+  reload: 0
+  objective: "/glade/work/cbecker/gecko-ml/geckoml/MLP_objective.py"
+  direction: "minimize"
+  metric: "box_mae"
+  n_trials: 20
+  gpu: True
+  save_path: '/glade/work/cbecker/ECHO_tolueneX10/'
+  sampler:
+    type: "TPESampler"
+  parameters:
+    MLP:hidden_neurons:
+      type: "int"
+      settings:
+        name: "hidden_neurons"
+        low: 128
+        high: 2000
+    MLP:lr:
+      type: "loguniform"
+      settings:
+        name: "lr"
+        low: 0.00000001
+        high: 0.001
+    MLP:l1_weight:
+      type: "loguniform"
+      settings:
+        name: "l1_weight"
+        low: 0.000000001
+        high: 0.001
+    MLP:l2_weight:
+      type: "loguniform"
+      settings:
+        name: "l2_weight"
+        low: 0.000000001
+        high: 0.001
+    MLP:kernel_reg:
+      type: "categorical"
+      settings:
+        name: "kernel_reg"
+        choices: ["None", "l1", "l2", "l1_l2"]
+    MLP:loss:
+      type: "categorical"
+      settings:
+        name: "loss"
+        choices: [["mae"], ["mse"], ["mape"]]
+    MLP:epochs:
+      type: "int"
+      settings:
+        name: "epochs"
+        low: 50
+        high: 2000
+#    MLP:epsilon:
+#      type: "loguniform"
+#      settings:
+#        name: "epsilon"
+#        low: 0.000000001
+#        high: 0.01
+#    MLP:loss:
+#      type: "categorical"
+#      settings:
+#        name: "epsilon"
+#        low: 0.000000001
+#        high: 0.1
+
+#    precursor_weight:
+#      type: "loguniform"
+#      settings:
+#        name: "precursor_weight"
+#        low: 0.1
+#        high: 100
+#    gas_weight:
+#      type: "loguniform"
+#      settings:
+#        name: "gas_weight"
+#        low: 0.1
+#        high: 100
+#    aerosol_weight:
+#      type: "loguniform"
+#      settings:
+#        name: "aerosol_weight"
+#        low: 0.1
+#        high: 100
+
+
