@@ -9,4 +9,4 @@
 module load cuda/11 cudnn
 conda activate gecko
 cd /glade/work/$USER/gecko-ml/applications/
-python train_gecko_emulators.py -c ../config/apin_O3_agg.yml >& ./train.txt
+python train_gecko_emulators.py -c ../config/toluene_no_prec.yml >& ./train.txt
