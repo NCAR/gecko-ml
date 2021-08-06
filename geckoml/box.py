@@ -13,24 +13,24 @@ disable_eager_execution()
 
 class GeckoBoxEmulator(object):
     """
-    Forward running box emulator for the GECKO-A atmospheric chemistry model. Uses first timestep of an experiment
-    as the initial conditions for first prediction of neural network - uses that prediction as the new input for
-    another prediction, and so on, looping through the length of an experiment.
-
-    Attributes:
-          neural_net_path (str): Path to saved neural network.
-          input_scaler (str): X Scaler object used on data to train the neural network.
-          output_scaler (str): Y Scaler object used on data to train the neural network.
-          input_cols (list): Columns used as input into model
-          output_cols (list): Columns used as output to model
-          seed (int): Random seed
+    Model class to run Box model through time.
+    Args:
+        neural_net_path: Path to saved model
+        input_cols: Feature names for input to model
+        output_cols: Feature names for output of model
+        model_object: Model object to be used in hyperparamter optimization. Deafults to None.
+        hyper_opt: Whether or not this is being used in a hyperparameter tuning setting. Defaults to False.
     """
 
-    def __init__(self, neural_net_path, input_cols, output_cols):
+    def __init__(self, neural_net_path, input_cols, output_cols, model_object=None, hyper_opt=False):
 
         self.neural_net_path = neural_net_path
         self.input_cols = input_cols
         self.output_cols = output_cols
+        if hyper_opt:
+            self.mod = model_object
+        else:
+            self.mod = load_model(self.neural_net_path)
 
         return
 
@@ -58,14 +58,14 @@ class GeckoBoxEmulator(object):
         batched_array = data_sub.values.reshape(n_exps, n_timesteps, n_features)
         init_array = batched_array[:, 0, :]
         pred_array = np.empty((n_exps, n_timesteps, len(self.output_cols)))
-        mod = load_model(self.neural_net_path)
+
 
         for time_step in range(n_timesteps):
 
             if time_step == 0:
-                pred = np.block(mod.predict(init_array))
+                pred = np.block(self.mod.predict(init_array))
             else:
-                pred = np.block(mod.predict(new_input))
+                pred = np.block(self.mod.predict(new_input))
             new_input = batched_array[:, time_step, :]
             new_input[:, out_col_idx] = pred
             pred_array[:, time_step, :] = pred
