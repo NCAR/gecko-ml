@@ -150,7 +150,7 @@ def inv_transform_preds(raw_preds, truth, y_scaler, log_trans_cols, tendency_col
     return preds
 
 
-def get_output_scaler(scaler_obj, output_indices, scaler_type='MinMaxScaler', data_range=(0, 1)):
+def get_output_scaler(scaler_obj, output_indices, scaler_type='MinMaxScaler'):
     """ Repopulate output scaler object with attributes from input scaler object.
     Args:
         scaler_obj: Input (x) scaler object
@@ -161,12 +161,12 @@ def get_output_scaler(scaler_obj, output_indices, scaler_type='MinMaxScaler', da
     Returns: output scaler
     """
     if scaler_type == 'MinMaxScaler':
-        scaler = MinMaxScaler(data_range)
+        scaler = MinMaxScaler((-1, 1))
         setattr(scaler, 'scale_', scaler_obj.scale_[output_indices])
         setattr(scaler, 'min_', scaler_obj.min_[output_indices])
 
     elif scaler_type == 'StandardScaler':
-        scaler = StandardScaler(data_range)
+        scaler = StandardScaler()
         setattr(scaler, 'scale_', scaler_obj.scale_[output_indices])
         setattr(scaler, 'mean_', scaler_obj.mean_[output_indices])
 
