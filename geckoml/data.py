@@ -64,7 +64,8 @@ def transform_data(data, out_path, species, tendency_cols, log_trans_cols, scale
     if train:
         x_scaler = scalers[scaler_type]()
         transformed_data['train_in'].loc[:] = x_scaler.fit_transform(transformed_data['train_in'])
-        y_scaler = get_output_scaler(x_scaler, output_vars, scaler_type)
+        output_indices = transformed_data['train_in'].columns.get_indexer(output_vars)
+        y_scaler = get_output_scaler(x_scaler, output_indices, scaler_type)
 
     else:
         x_scaler = joblib.load(join(out_path, 'models', f'{species}_x.scaler'))
@@ -120,7 +121,7 @@ def inverse_log_transform(dataframe, cols_to_transform):
     return dataframe
 
 
-def inv_transform_preds(preds, truth, y_scaler, log_trans_cols, tendency_cols):
+def inv_transform_preds(raw_preds, truth, y_scaler, log_trans_cols, tendency_cols):
     """
     Reconstruct model predictions into matching dataframe against truth
     Args:
@@ -132,6 +133,7 @@ def inv_transform_preds(preds, truth, y_scaler, log_trans_cols, tendency_cols):
     Returns:
          transformed pandas dataframe of predictions including time and experiment numbers
     """
+    preds = raw_preds.copy()
     preds.loc[:] = y_scaler.inverse_transform(preds)
     for col in log_trans_cols:
         if np.isin(col, preds.columns):
@@ -148,7 +150,7 @@ def inv_transform_preds(preds, truth, y_scaler, log_trans_cols, tendency_cols):
     return preds
 
 
-def get_output_scaler(scaler_obj, output_vars, scaler_type='MinMaxScaler', data_range=(-1, 1)):
+def get_output_scaler(scaler_obj, output_indices, scaler_type='MinMaxScaler', data_range=(0, 1)):
     """ Repopulate output scaler object with attributes from input scaler object.
     Args:
         scaler_obj: Input (x) scaler object
@@ -158,16 +160,15 @@ def get_output_scaler(scaler_obj, output_vars, scaler_type='MinMaxScaler', data_
 
     Returns: output scaler
     """
-    num_features = len(output_vars)
     if scaler_type == 'MinMaxScaler':
         scaler = MinMaxScaler(data_range)
-        setattr(scaler, 'scale_', scaler_obj.scale_[0:num_features])
-        setattr(scaler, 'min_', scaler_obj.min_[0:num_features])
+        setattr(scaler, 'scale_', scaler_obj.scale_[output_indices])
+        setattr(scaler, 'min_', scaler_obj.min_[output_indices])
 
     elif scaler_type == 'StandardScaler':
         scaler = StandardScaler(data_range)
-        setattr(scaler, 'scale_', scaler_obj.scale_[0:num_features])
-        setattr(scaler, 'mean_', scaler_obj.mean_[0:num_features])
+        setattr(scaler, 'scale_', scaler_obj.scale_[output_indices])
+        setattr(scaler, 'mean_', scaler_obj.mean_[output_indices])
 
     return scaler
 

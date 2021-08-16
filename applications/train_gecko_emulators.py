@@ -61,7 +61,7 @@ def main():
                                          index=transformed_data['val_out'].index)
                     transformed_preds = inv_transform_preds(preds, transformed_data["val_out"], y_scaler,
                                                              log_trans_cols, tendency_cols)
-                    MLP_metrics[model_name][f'_{member}'] = ensembled_metrics(transformed_data['val_out'],
+                    MLP_metrics[model_name][f'_{member}'] = ensembled_metrics(data['val_out'],
                                                                               transformed_preds, member, output_vars)
                     print(MLP_metrics[model_name][f'_{member}'])
                     mod.model.save(join(output_path, 'models', f'{species}_{model_name}_{member}'))

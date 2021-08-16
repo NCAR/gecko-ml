@@ -56,19 +56,30 @@ class GeckoBoxEmulator(object):
         n_features = len(self.input_cols)
         out_col_idx = data_sub.columns.get_indexer(self.output_cols)
         batched_array = data_sub.values.reshape(n_exps, n_timesteps, n_features)
-        init_array = batched_array[:, 0, :]
+        # init_array = batched_array[:, 0, :]
         pred_array = np.empty((n_exps, n_timesteps, len(self.output_cols)))
 
 
+        # for time_step in range(n_timesteps):
+        #
+        #     if time_step == 0:
+        #         pred = np.block(self.mod.predict(init_array))
+        #     else:
+        #         pred = np.block(self.mod.predict(new_input))
+        #     pred_array[:, time_step, :] = pred
+        #     new_input = batched_array[:, time_step, :]
+        #     new_input[:, out_col_idx] = pred
         for time_step in range(n_timesteps):
-
             if time_step == 0:
-                pred = np.block(self.mod.predict(init_array))
-            else:
-                pred = np.block(self.mod.predict(new_input))
-            new_input = batched_array[:, time_step, :]
-            new_input[:, out_col_idx] = pred
+                new_input = batched_array[:, time_step, :]
+            elif time_step > 0:
+                new_input = batched_array[:, time_step, :]
+                new_input[:, out_col_idx] = pred
+
+            pred = np.block(self.mod.predict(new_input))
             pred_array[:, time_step, :] = pred
+
+
 
         preds_df = pd.DataFrame(data=pred_array.reshape(-1, len(self.output_cols)),
                                 columns=raw_val_output.columns, index=raw_val_output.index)
