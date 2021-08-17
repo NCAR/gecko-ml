@@ -5,7 +5,7 @@ import pandas as pd
 import yaml
 import time
 from geckoml.box import GeckoBoxEmulator
-from geckoml.metrics import ensembled_metrics, save_analysis_plots
+from geckoml.metrics import ensembled_metrics, save_analysis_plots, sum_bins
 from geckoml.data import save_metrics, load_data, transform_data, inv_transform_preds
 from os.path import join
 
@@ -32,6 +32,7 @@ def main():
     log_trans_cols = config['log_trans_cols']
     ensemble_members = config['ensemble_members']
     scaler_type = config['scaler_type']
+    bin_prefix = config['bin_prefix']
 
     data = load_data(data_path, aggregate_bins, species, input_vars, output_vars)
     transformed_data, x_scaler, y_scaler = transform_data(data, output_path, species, tendency_cols, log_trans_cols,
@@ -41,32 +42,36 @@ def main():
     for model_type in config["model_configurations"].keys():
         if model_type == 'MLP':
             for model_name in config['model_configurations'][model_type].keys():
-                metrics[model_name], predictions, truth = {}, {}, {}
+                metrics[model_name], predictions, truth_dict = {}, {}, {}
                 for member in range(ensemble_members):
+
                     nnet_path = join(output_path, 'models', f'{species}_{model_name}_{member}')
                     mod = GeckoBoxEmulator(neural_net_path=nnet_path,
                                            input_cols=input_vars,
                                            output_cols=output_vars)
-                    true_sub, preds = mod.run_box_simulation(raw_val_output=data['val_out'],
+                    raw_box_preds = mod.run_box_simulation(raw_val_output=data['val_out'],
                                                              transformed_val_input=transformed_data['val_in'],
                                                              exps=exps)
 
-                    transformed_preds = inv_transform_preds(preds=preds,
-                                                            truth=transformed_data["val_out"],
+                    truth, box_preds = inv_transform_preds(raw_preds=raw_box_preds,
+                                                            truth=data["val_out"],
                                                             y_scaler=y_scaler,
                                                             log_trans_cols=log_trans_cols,
                                                             tendency_cols=tendency_cols)
-                    metrics[model_name][f'member_{member}'] = ensembled_metrics(y_true=true_sub,
-                                                                                y_pred=transformed_preds,
+                    if not aggregate_bins:
+                        truth, box_preds = sum_bins(truth, box_preds, bin_prefix)
+
+                    metrics[model_name][f'member_{member}'] = ensembled_metrics(y_true=truth,
+                                                                                y_pred=box_preds,
                                                                                 member=member,
                                                                                 output_vars=output_vars)
-                    transformed_preds['member'] = member
-                    true_sub['member'] = member
-                    truth[model_name + f'_{member}'] = true_sub
-                    predictions[model_name + f'_{member}'] = transformed_preds
+                    truth.loc[:, 'member'] = member
+                    box_preds.loc[:, 'member'] = member
+                    truth_dict[model_name + f'_{member}'] = truth
+                    predictions[model_name + f'_{member}'] = box_preds
 
+                all_truth = pd.concat(truth_dict.values())
                 all_preds = pd.concat(predictions.values())
-                all_truth = pd.concat(truth.values())
                 all_preds.to_parquet(join(output_path, f'metrics/{species}_{model_name}_preds.parquet'))
                 all_truth.to_parquet(join(output_path, f'metrics/{species}_{model_name}_truth.parquet'))
                 save_metrics(metrics[model_name], output_path, model_name, ensemble_members, 'box')

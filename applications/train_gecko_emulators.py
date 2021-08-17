@@ -15,7 +15,7 @@ from os.path import join
 def main():
     
     start = time.time()
-
+    print('BEG')
     parser = argparse.ArgumentParser()
     parser.add_argument("-c", "--config", default="apin_O3.yml", help="Path to config file")
     args = parser.parse_args()
@@ -25,7 +25,6 @@ def main():
     species = config['species']
     data_path = config['dir_path']
     aggregate_bins = config['aggregate_bins']
-    bin_prefix = config['bin_prefix']
     input_vars = config['input_vars']
     output_vars = config['output_vars']
     tendency_cols = config['tendency_cols']
@@ -59,10 +58,12 @@ def main():
                     preds = pd.DataFrame(mod.predict(transformed_data['val_in']),
                                          columns=transformed_data['val_out'].columns,
                                          index=transformed_data['val_out'].index)
-                    transformed_preds = inv_transform_preds(preds, transformed_data["val_out"], y_scaler,
+                    truth, single_ts_preds = inv_transform_preds(preds, transformed_data["val_out"], y_scaler,
                                                              log_trans_cols, tendency_cols)
-                    MLP_metrics[model_name][f'_{member}'] = ensembled_metrics(data['val_out'],
-                                                                              transformed_preds, member, output_vars)
+                    MLP_metrics[model_name][f'_{member}'] = ensembled_metrics(truth,
+                                                                              single_ts_preds,
+                                                                              member,
+                                                                              output_vars)
                     print(MLP_metrics[model_name][f'_{member}'])
                     mod.model.save(join(output_path, 'models', f'{species}_{model_name}_{member}'))
                 mod.save_fortran_model(join(output_path, 'models', model_name + '.nc'))
