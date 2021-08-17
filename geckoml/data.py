@@ -40,6 +40,8 @@ def load_data(path, aggregate_bins, species, input_columns, output_columns):
         elif '_out in partition':
             data[partition] = data[partition][output_columns]
 
+        data[partition] = data[partition].groupby('id').apply(lambda x: x.iloc[1:, :]).reset_index(level=2, drop=True)
+
     return data
 
 
@@ -100,7 +102,7 @@ def log_transform(dataframe, cols_to_transform):
     Perform log 10 transformation of specified columns
     Args:
         dataframe: full dataframe
-        cols_to_transform: list of columns to perform transformation on 
+        cols_to_transform: list of columns to perform transformation on
     """
     for col in cols_to_transform:
         if np.isin(col, dataframe.columns):
@@ -113,11 +115,10 @@ def inverse_log_transform(dataframe, cols_to_transform):
     Perform inverse log 10 transformation of specified columns
     Args:
         dataframe: full dataframe
-        cols_to_transform: list of columns to perform transformation on 
+        cols_to_transform: list of columns to perform transformation on
     """
-    for col in cols_to_transform:
-        if np.isin(col, dataframe.columns):
-            dataframe.loc[:, col] = 10 ** dataframe[col]
+
+    dataframe.loc[:, cols_to_transform] = 10 ** dataframe[cols_to_transform]
     return dataframe
 
 
@@ -135,31 +136,36 @@ def inv_transform_preds(raw_preds, truth, y_scaler, log_trans_cols, tendency_col
     """
     preds = raw_preds.copy()
     preds.loc[:] = y_scaler.inverse_transform(preds)
-    for col in log_trans_cols:
-        if np.isin(col, preds.columns):
-            preds.loc[:, col] = inverse_log_transform(preds, col)
-    # if tendency_cols:
-    #     first_time_step = truth.index.get_level_values('Time [s]').min()
-    #     for col in tendency_cols:
-    #         if np.isin(col, preds_df.columns):
-    #             preds_df_tend.loc[preds_df_tend.index.get_level_values(
-    #                 'Time [s]') > first_time_step, col] = preds_df[col].values
-    #     return preds_df_tend.groupby('id').cumsum()
-    #
-    # else:
-    return preds
+    cols = list(set(log_trans_cols) & set(raw_preds.columns))
+    preds.loc[:, cols] = inverse_log_transform(preds, cols)
+
+    if tendency_cols:
+        preds_df_tend = truth.copy()
+        first_time_step = truth.index.get_level_values('Time [s]').min()
+        for col in tendency_cols:
+            if np.isin(col, preds.columns):
+                preds_df_tend.loc[preds_df_tend.index.get_level_values(
+                    'Time [s]') > first_time_step, col] = preds.loc[
+                    preds.index.get_level_values('Time [s]') > first_time_step, col]
+
+        inv_tend_df = preds_df_tend.groupby('id').cumsum()
+        preds = inv_tend_df.loc[inv_tend_df.index.get_level_values('Time [s]') > first_time_step]
+        truth = truth.loc[truth.index.get_level_values('Time [s]') > first_time_step]
+
+    return truth, preds
 
 
 def get_output_scaler(scaler_obj, output_indices, scaler_type='MinMaxScaler'):
     """ Repopulate output scaler object with attributes from input scaler object.
     Args:
         scaler_obj: Input (x) scaler object
-        output_vars: list of output variables from config
+        output_indices: array of column indices for each output feature
         scaler_type: Sklearn scaler type from config
         data_range: data bounds for scaling from config
 
     Returns: output scaler
     """
+
     if scaler_type == 'MinMaxScaler':
         scaler = MinMaxScaler((-1, 1))
         setattr(scaler, 'scale_', scaler_obj.scale_[output_indices])

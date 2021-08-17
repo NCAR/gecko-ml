@@ -3,10 +3,8 @@ import numpy as np
 from tensorflow.keras.models import load_model
 from tensorflow.python.framework.ops import disable_eager_execution
 import random
-from .data import inverse_log_transform
 import torch
 from sklearn.metrics import mean_squared_error, mean_absolute_error
-from geckoml.metrics import get_stability
 
 disable_eager_execution()
 
@@ -56,19 +54,8 @@ class GeckoBoxEmulator(object):
         n_features = len(self.input_cols)
         out_col_idx = data_sub.columns.get_indexer(self.output_cols)
         batched_array = data_sub.values.reshape(n_exps, n_timesteps, n_features)
-        # init_array = batched_array[:, 0, :]
         pred_array = np.empty((n_exps, n_timesteps, len(self.output_cols)))
 
-
-        # for time_step in range(n_timesteps):
-        #
-        #     if time_step == 0:
-        #         pred = np.block(self.mod.predict(init_array))
-        #     else:
-        #         pred = np.block(self.mod.predict(new_input))
-        #     pred_array[:, time_step, :] = pred
-        #     new_input = batched_array[:, time_step, :]
-        #     new_input[:, out_col_idx] = pred
         for time_step in range(n_timesteps):
             if time_step == 0:
                 new_input = batched_array[:, time_step, :]
@@ -79,11 +66,11 @@ class GeckoBoxEmulator(object):
             pred = np.block(self.mod.predict(new_input))
             pred_array[:, time_step, :] = pred
 
-
+        idx = raw_val_output.index
 
         preds_df = pd.DataFrame(data=pred_array.reshape(-1, len(self.output_cols)),
-                                columns=raw_val_output.columns, index=raw_val_output.index)
-        return truth, preds_df
+                                columns=self.output_cols, index=idx)
+        return preds_df
 
     
 ### Add trainer classes for training and validation mode

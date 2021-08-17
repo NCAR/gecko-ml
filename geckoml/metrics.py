@@ -10,7 +10,6 @@ from os.path import join
 from scipy.stats import pearsonr
 
 from scipy.signal import tukey
-from numpy.fft import fft, fftshift
 from numpy.fft import rfft, rfftfreq
 
 
@@ -132,7 +131,7 @@ def get_stability(preds, stability_thresh, output_cols):
     return stable_exps, unstable_exps
 
 
-def ensembled_metrics(y_true, y_pred, member, output_vars, stability_thresh=1):
+def ensembled_metrics(y_true, y_pred, member, output_vars, stability_thresh=5):
     """ Call a variety of metrics to be calculated (Hellenger distance R2, and RMSE currently) on Box emulator results.
         If bins were not aggregated, all bins are summed before metrics are calculated.
     Args:
@@ -212,7 +211,7 @@ def plot_ensemble(truth, preds, output_path, output_vars, species, model_name):
         species: Species (from config) used for labeling
         model_name: Model Name (used for labeling)
     """
-    all_exps = truth.index.unique(level='id')
+    all_exps = truth['id'].unique()
     exps = np.random.choice(all_exps, 3, replace=False)
     color = ['r', 'b', 'g']
     mean_ensemble = preds.groupby(['Time [s]', 'id']).mean()[output_vars]
@@ -223,15 +222,16 @@ def plot_ensemble(truth, preds, output_path, output_vars, species, model_name):
 
     for i, exp in enumerate(exps):
         for j, var in enumerate(output_vars):
-            t = t_sub.loc[t_sub.index.get_level_values('id') == exp, var].values
-            axes[j, i].plot(t, linestyle='--', color='k', linewidth=2, label='True')
+            t_sub.to_csv('/glade/scratch/cbecker/tsubt.csv')
+            t = t_sub.loc[t_sub['id'] == exp, var].values
+            axes[j, i].plot(t, linestyle='--', color='k', linewidth=3, label='True')
             if j == 0:
                 axes[j, i].set_title(exp, fontsize=22)
             if i == 0:
                 axes[j, i].set_ylabel(var, fontsize=20)
             for member in preds['member'].unique():
                 p = preds.loc[preds['member'] == member]
-                p_sub = p.loc[p.index.get_level_values('id') == exp, var].values
+                p_sub = p.loc[p['id'] == exp, var].values
                 if member == 0:
                     axes[j, i].plot(p_sub, linewidth=0.3, color=color[j], label='Ensemble Member')
                 else:
@@ -473,7 +473,7 @@ def plot_crps_bootstrap(truth, preds, columns, output_path, species, model_name,
         plt.savefig(join(output_path, f'plots/{species}_CRPS_{model_name}.png'), bbox_inches='tight')
 
 
-def plot_unstability(preds, columns, output_path, model_name, stability_thresh=1):
+def plot_unstability(preds, columns, output_path, model_name, stability_thresh=10):
     """
     Plot unstable runs by timestep for each mass phase specified
     Args:
@@ -567,9 +567,11 @@ def plot_scatter_analysis(preds, truth, train, val, cols, output_path, species, 
 
 def save_analysis_plots(all_truth, all_preds, train_input, val_input, output_path, output_vars, species, model_name):
 
-    plot_ensemble(all_truth, all_preds, output_path, output_vars, species, model_name)
+
     all_truth.reset_index(inplace=True)
     all_preds.reset_index(inplace=True)
+    all_truth['member'] = all_preds['member']
+    plot_ensemble(all_truth, all_preds, output_path, output_vars, species, model_name)
     plot_bootstrap_ci(all_truth, all_preds, output_vars, output_path, species, model_name)
     plot_crps_bootstrap(all_truth, all_preds, output_vars, output_path, species, model_name)
     plot_unstability(all_preds, output_vars, output_path, model_name)
@@ -666,3 +668,15 @@ def fourier_analysis(preds, output_path, species, model_name):
     plt.tight_layout()
     plt.savefig(os.path.join(output_path, f"plots/{species}_fourier_analysis_{model_name}.pdf"), dpi = 300)
     plt.show()
+
+
+def sum_bins(truth, preds, bin_prefix):
+    """" Add new columns for the sums of the predicted bins by mass for ease of plotting.
+    Args:
+        truth (df): Truth dataframe
+        preds (df): Predictions dataframe
+        bin_prefix (list): Bin prefixes to search for bins
+    """
+    for prefix in bin_prefix:
+        preds[prefix] = preds.loc[:, preds.columns.str.contains(prefix, regex=False)].sum(axis=1)
+    return truth, preds
