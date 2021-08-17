@@ -213,7 +213,7 @@ def plot_ensemble(truth, preds, output_path, output_vars, species, model_name):
     """
     all_exps = truth['id'].unique()
     exps = np.random.choice(all_exps, 3, replace=False)
-    color = ['r', 'b', 'g']
+    color = ['darkred', 'darkblue', 'darkgreen']
     mean_ensemble = preds.groupby(['Time [s]', 'id']).mean()[output_vars]
     fig, axes = plt.subplots(len(output_vars), 3, figsize=(20, 16), sharex='col', sharey='row',
                              gridspec_kw={'hspace': 0, 'wspace': 0})
@@ -237,7 +237,7 @@ def plot_ensemble(truth, preds, output_path, output_vars, species, model_name):
                 else:
                     axes[j, i].plot(p_sub, linewidth=0.3, color=color[j], label='')
             m = mean_ensemble.loc[mean_ensemble.index.get_level_values('id') == exp, var].values
-            axes[j, i].plot(m, color=color[j], linewidth=2, label='Ensemble Mean')
+            axes[j, i].plot(m, color=color[j], linewidth=3, label='Ensemble Mean')
     for i in range(3):
         axes[0, i].legend()
 
@@ -322,7 +322,7 @@ def plot_bootstrap_ci(truth, preds, columns, output_path, species, model_name, n
 
     for i, ax in enumerate(axs.ravel()):
 
-        colors = ['r', 'g', 'b']
+        colors = ['darkred', 'darkblue', 'darkgreen']
         time = mean_truth.index / 60 / 60 / 24
         ax.xaxis.set_tick_params(labelsize=16)
         ax.plot(time, mean_err[columns[i]], color=colors[i], lw=3, label=columns[i])
@@ -344,7 +344,7 @@ def plot_bootstrap_ci(truth, preds, columns, output_path, species, model_name, n
 
     for i, ax in enumerate(axs.ravel()):
 
-        colors = ['r', 'g', 'b']
+        colors = ['darkred', 'darkblue', 'darkgreen']
         time = mean_truth.index / 60 / 60 / 24
         ax.xaxis.set_tick_params(labelsize=16)
         ax.plot(time, mean_truth[columns[i]], color=colors[i], lw=3, label=columns[i])
@@ -457,7 +457,7 @@ def plot_crps_bootstrap(truth, preds, columns, output_path, species, model_name,
     for i, phase in enumerate(crps.keys()):
         if phase == 'Precursor [ug/m3]':
             ax[i].set_yscale('log')
-        colors = ['r', 'g', 'b']
+        colors = ['darkred', 'darkblue', 'darkgreen']
         ax[i].xaxis.set_tick_params(labelsize=16)
         ax[i].plot(time, crps[phase], color=colors[i], lw=3, label=f'Mean {phase} CRPS')
         ax[i].plot(time, lower_ci[phase], color='k', lw=1)
@@ -488,7 +488,7 @@ def plot_unstability(preds, columns, output_path, model_name, stability_thresh=1
 
     total_runs = int(len(preds) / preds['Time [s]'].nunique())
     time = preds['Time [s]'].unique() / 60 / 60 / 24
-    colors = ['lightblue', 'red', 'green']
+    colors = ['red', 'lightblue', 'green']
     plt.figure(figsize=(24, 8))
     plt.tick_params(axis='both', labelsize=18)
 
