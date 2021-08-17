@@ -55,19 +55,25 @@ class Objective(BaseObjective):
                                    model_object=mod,
                                    hyper_opt=True)
 
-        true_sub, preds = box_mod.run_box_simulation(raw_val_output=data['val_out'],
+        raw_box_preds = box_mod.run_box_simulation(raw_val_output=data['val_out'],
                                                      transformed_val_input=transformed_data['val_in'],
                                                      exps=exps)
 
-        transformed_preds = inv_transform_preds(preds=preds,
-                                                truth=transformed_data["val_out"],
+        truth, box_preds = inv_transform_preds(raw_preds=raw_box_preds,
+                                                truth=data["val_out"],
                                                 y_scaler=y_scaler,
                                                 log_trans_cols=log_trans_cols,
                                                 tendency_cols=tendency_cols)
 
-        metrics = ensembled_metrics(y_true=true_sub,
-                                    y_pred=transformed_preds,
+        metrics = ensembled_metrics(y_true=truth,
+                                    y_pred=box_preds,
                                     member=0,
-                                    output_vars=output_vars)
+                                    output_vars=output_vars,
+                                    stability_thresh=10)
 
-        return metrics['mean_mae'].mean()
+        box_mae = {'mean_mae': metrics['mean_mae'].mean(),
+                   'mean_mape': metrics['Mean % MAE'].mean(),
+                   'gas_mape': metrics.loc[metrics['mass_phase'] == 'Gas [ug/m3]', 'Mean % MAE'],
+                   'aero_mape': metrics.loc[metrics['mass_phase'] == 'Aerosol [ug_m3]', 'Mean % MAE']}
+
+        return box_mae

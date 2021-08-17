@@ -1,44 +1,43 @@
 log:
-  save_path: '/glade/work/cbecker/ECHO_tolueneX10/'
+  save_path: '/glade/work/cbecker/echo_log_dodecane.txt'
 
-slurm:
-  jobs: 4
-  kernel: "conda activate gecko"
-  bash: ["module load cuda/11 cudnn"]
+pbs:
+  jobs: 20
+  bash: ["conda activate gecko", "module load cuda/11 cudnn"]
   batch:
-    account: "NAML0001"
-    gres: "gpu:v100:1"
-    mem: "64G"
-    x: "casper36"
-    n: 8
-    t: "1:00:00"
-    J: "gecko"
-    o: "hyper_opt.out"
-    e: "hyper_opt.err"
+    l: ["select=1:ncpus=8:ngpus=1:mem=64GB",  "gpu_type=v100", "walltime=06:00:00"]
+    A: "NAML0001"
+    q: "casper"
+    N: "echo_trial"
+    o: "echo_trial.out"
+    e: "echo_trial.err"
     
 optuna:
-  name: "gecko-charlie_tolueneX10.db"
+  study_name: "dodecane-20210816"
+  storage: "sqlite:////glade/work/cbecker/dodecane_20210816/dodecane_aggg.db"
   reload: 0
   objective: "/glade/work/cbecker/gecko-ml/geckoml/MLP_objective.py"
   direction: "minimize"
-  metric: "box_mae"
-  n_trials: 20
+  metric: "mean_mae"
+  n_trials: 50
   gpu: True
-  save_path: '/glade/work/cbecker/ECHO_tolueneX10/'
+  save_path: 'test_dodecane/'
   sampler:
     type: "TPESampler"
+    n_startup_trials: 300
+
   parameters:
     MLP:hidden_neurons:
       type: "int"
       settings:
         name: "hidden_neurons"
         low: 128
-        high: 2000
+        high: 1000
     MLP:lr:
       type: "loguniform"
       settings:
         name: "lr"
-        low: 0.00000001
+        low: 0.0000001
         high: 0.001
     MLP:l1_weight:
       type: "loguniform"
@@ -50,24 +49,29 @@ optuna:
       type: "loguniform"
       settings:
         name: "l2_weight"
-        low: 0.000000001
+        low: 0.00000001
         high: 0.001
     MLP:kernel_reg:
       type: "categorical"
       settings:
         name: "kernel_reg"
-        choices: ["None", "l1", "l2", "l1_l2"]
+        choices: ["None", "l2", "l1_l2"]
+    scaler_type:
+      type: "categorical"
+      settings:
+        name: "scaler_type"
+        choices: ["MinMaxScaler", "StandardScaler"]
     MLP:loss:
       type: "categorical"
       settings:
         name: "loss"
-        choices: [["mae"], ["mse"], ["mape"]]
+        choices: [["mae"], ["mse"]]
     MLP:epochs:
       type: "int"
       settings:
         name: "epochs"
-        low: 50
-        high: 2000
+        low: 20
+        high: 500
 #    MLP:epsilon:
 #      type: "loguniform"
 #      settings:

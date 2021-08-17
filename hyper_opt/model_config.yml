@@ -1,6 +1,6 @@
-species: 'tolueneX10'
+species: 'dodecane'
 dir_path: '/glade/p/cisl/aiml/gecko/partition_data'
-output_path: '/glade/work/cbecker/ECHO_tolueneX10/'
+output_path: '/glade/work/cbecker/ECHO_dodecane/'
 aggregate_bins: True
 scaler_type: "StandardScaler"
 bin_prefix: ['Gas [ug/m3]', 'Aerosol [ug_m3]']
