@@ -222,7 +222,7 @@ def plot_ensemble(truth, preds, output_path, output_vars, species, model_name):
 
     for i, exp in enumerate(exps):
         for j, var in enumerate(output_vars):
-            t_sub.to_csv('/glade/scratch/cbecker/tsubt.csv')
+            t_sub.to_csv(join(output_path, 'plots/tsubt.csv'))
             t = t_sub.loc[t_sub['id'] == exp, var].values
             axes[j, i].plot(t, linestyle='--', color='k', linewidth=3, label='True')
             if j == 0:
@@ -577,6 +577,7 @@ def save_analysis_plots(all_truth, all_preds, train_input, val_input, output_pat
     plot_unstability(all_preds, output_vars, output_path, model_name)
     plot_scatter_analysis(all_preds, all_truth, train_input, val_input, output_vars,
                           output_path, species, model_name)
+    #fourier_analysis(all_preds, output_path, species, model_name)
     
     
 def fourier_analysis(preds, output_path, species, model_name):
@@ -628,12 +629,12 @@ def fourier_analysis(preds, output_path, species, model_name):
                 plt.subplot(3, 2, 1 + g)
                 plt.plot( t_gtrend_orig, a_gtrend_orig, label=f'raw {name} data', c = "k"  )
                 plt.plot( t_gtrend_orig, a_gtrend_windowed, label='windowed data', c = "r"  )
-                plt.xlabel( 'secs' )
-                plt.ylabel( column_name.replace("ug_m3", "ug/m3") )
+                plt.xlabel('secs')
+                plt.ylabel(column_name.replace("ug_m3", "ug/m3") )
                 plt.title(f"Experiment {exp_id}")
                 plt.legend()
 
-            a_gtrend_psd = abs(rfft(a_gtrend_orig ))
+            a_gtrend_psd = abs(rfft(a_gtrend_orig))
             a_gtrend_psdtukey = abs(rfft(a_gtrend_windowed))
             a_gtrend_freqs = rfftfreq(len(a_gtrend_orig), d = dt)
 

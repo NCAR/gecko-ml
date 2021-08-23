@@ -6,6 +6,9 @@ import random
 import torch
 from sklearn.metrics import mean_squared_error, mean_absolute_error
 
+from .data import inv_transform_preds
+from .metrics import ensembled_metrics
+
 disable_eager_execution()
 
 
@@ -73,18 +76,16 @@ class GeckoBoxEmulator(object):
         return preds_df
 
     
-### Add trainer classes for training and validation mode
-
 def rnn_box_train_one_epoch(model, 
                             optimizer, 
                             loss_fn, 
-                            batch_size, 
-                            exps, 
-                            num_timesteps, 
+                            batch_size,
                             in_array, 
-                            env_array, 
+                            out_col_idx,
                             hidden_weight = 1.0, 
+                            loss_weights = [1.0, 1.0, 1.0],
                             grad_clip = 1.0):
+    
     
     """ Train an RNN model for one epoch given training data as input
     Args:
@@ -92,10 +93,11 @@ def rnn_box_train_one_epoch(model,
         optimizer (torch.nn.Module)
         loss_fn (torch.nn.Module)
         batch_size (int)
-        exps (List[str])
-        num_timesteps (int)
         in_array (np.array)
-        env_array (np.array)
+        out_col_idx (list)
+        hidden_weight (float)
+        loss_weights (list(float))
+        grad_clip (float)
     Return:
         train_loss (float)
         model (torch.nn.Module)
@@ -107,19 +109,23 @@ def rnn_box_train_one_epoch(model,
     
     # Grab the device from the model
     device = model._device()
+    
+    # Move the weights to the device
+    loss_weights = torch.FloatTensor(loss_weights).to(device)
 
     # Prepare the training dataset.
+    num_timesteps = in_array.shape[1]
     num_experiments = in_array.shape[0]
     batches_per_epoch = int(np.ceil(num_experiments / batch_size))
-
     batched_experiments = list(range(batches_per_epoch))
     random.shuffle(batched_experiments)
 
     train_epoch_loss = []
     for j in batched_experiments:
 
-        _in_array = torch.from_numpy(in_array[j * batch_size: (j + 1) * batch_size]).to(device).float()
-        _env_array = torch.from_numpy(env_array[j * batch_size: (j + 1) * batch_size]).to(device).float()
+        random_indices = list(range(in_array.shape[0]))
+        random_selection = random.sample(random_indices, batch_size)
+        _in_array = torch.from_numpy(in_array[random_selection]).to(device).float()
 
         # Use initial condition @ t = 0 and get the first prediction
         # Clear gradient
@@ -129,8 +135,9 @@ def rnn_box_train_one_epoch(model,
         pred, h0 = model(_in_array[:, 0, :], h0)
 
         # get loss for the predicted output
-        loss = loss_fn(_in_array[:, 1, :3], pred)
-
+        loss = loss_fn(_in_array[:, 1, out_col_idx], pred)
+        loss = (loss_weights * loss).mean()
+        
         # get gradients w.r.t to parameters
         loss.backward()
         train_epoch_loss.append(loss.item())
@@ -139,23 +146,25 @@ def rnn_box_train_one_epoch(model,
         torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
         optimizer.step()
 
-        for i in range(1, num_timesteps-1): 
+        for i in range(1, num_timesteps-1):
             # Use the last prediction to get the next prediction
             optimizer.zero_grad()
-            # static envs 
-            temperature = _in_array[:, i, 3:4]
-            static_env = _env_array[:, -5:]
-            new_input = torch.cat([pred.detach(), temperature, static_env], 1)
+
+            # update the next input to the model
+            new_input = _in_array[:, i, :]
+            new_input[:, out_col_idx] = pred.detach()
             
             # predict hidden state
             h0_pred = model.init_hidden(new_input.cpu())
             # compute loss for the last hidden prediction
-            hidden_loss = loss_fn(h0.detach(), h0_pred)
-            
+            hidden_loss = loss_fn(h0.detach(), h0_pred).mean()
             # predict next state with the GRU
             pred, h0 = model(new_input, h0.detach())
-            loss = loss_fn(_in_array[:, i+1, :3], pred)
-            
+                
+            # get loss for the predicted output
+            loss = loss_fn(_in_array[:, i+1, out_col_idx], pred)
+            loss = (loss_weights * loss).mean()
+        
             # combine losses
             loss += hidden_weight * hidden_loss
 
@@ -172,95 +181,111 @@ def rnn_box_train_one_epoch(model,
     return train_loss, model, optimizer
 
 
+
 def rnn_box_test(model, 
-                 exps, 
-                 num_timesteps, 
+                 loss_fn,
                  in_array, 
-                 env_array, 
-                 y_scaler, 
+                 out_array,
+                 y_scaler,
                  output_cols, 
-                 out_val, 
-                 stable_thresh = 1.0, 
+                 out_col_idx,
+                 log_trans_cols,
+                 tendency_cols,
+                 stable_thresh = 10, 
                  start_times = [0]):
     
     """ Run an RNN model in inference mode data as input
     Args:
         model (torch.nn.Module)
-        exps (List[str])
-        num_timesteps (int)
+        loss_fn (torch.nn.Module)
         in_array (np.array)
-        env_array (np.array)
+        out_array (pd.DataFrame)
         y_scaler (sklearn.preprocessing._data.Scaler)
         output_cols (List[str])
-        out_val (pd.DataFrame)
+        out_col_idx (List[str])
+        log_trans_cols (List[str])
+        tendency_cols (List[str])
         stable_thresh (float)
-        starting_time (int)
+        starting_times (List[int])
     Return:
-        box_mae (float)
-        scaled_box_mae (float)
+        mean_step_loss (float)
+        mean_box_mae (float)
         preds (pd.DataFrame)
         truth (pd.DataFrame)
     """
     
-    epoch_loss = []
-    box_loss_mae = []
+    # Put the model into eval model
+    model.eval()
     
+    # Grab the device from the model
+    device = model._device()
+    
+    # How many total timesteps in the data
+    num_timesteps = in_array.shape[1]
+    
+    all_preds, all_truths, total_loss = [], [], []
     for start_time in start_times:
         
+        val_loss = []
+        _in_array = torch.from_numpy(in_array).to(device).float()
+        
         with torch.no_grad():
-            # use initial condition @ t = 0 and get the first prediction
-            pred_array = np.empty((len(exps), 1439-start_time, 3))
-            h0 = model.init_hidden(torch.from_numpy(in_array[:, start_time, :]).float())
-            pred, h0 = model.predict(in_array[:, start_time, :], h0)
-            pred_array[:, 0, :] = pred
-            loss = mean_absolute_error(in_array[:, start_time + 1, :3], pred)
-            epoch_loss.append(loss)
+            
+            # set up array for saving predicted results
+            pred_array = np.empty((in_array.shape[0], num_timesteps-start_time, len(out_col_idx)))
+            
+            # use initial condition @ t = start_time and get the first prediction
+            h0 = model.init_hidden(_in_array[:, start_time, :])
+            pred, h0 = model(_in_array[:, start_time, :], h0)
+            pred_array[:, 0, :] = pred.cpu().numpy()
+            loss = loss_fn(_in_array[:, start_time + 1, out_col_idx], pred).item()
+            val_loss.append(loss)
 
             # use the first prediction to get the next, and so on for num_timesteps
             for k, i in enumerate(range(start_time + 1, num_timesteps)): 
-                temperature = in_array[:, i, 3:4]
-                static_env = env_array[:, -5:]
-                new_input = np.block([pred, temperature, static_env])
-                pred, h0 = model.predict(new_input, h0)
-                pred_array[:, k+1, :] = pred
+                new_input = _in_array[:, i, :]
+                new_input[:, out_col_idx] = pred
+                pred, h0 = model(new_input, h0)
+                pred_array[:, k+1, :] = pred.cpu().numpy()
                 if i < (num_timesteps-1):
-                    loss = mean_absolute_error(in_array[:, i+1, :3], pred)
-                    epoch_loss.append(loss)
+                    loss = loss_fn(_in_array[:, i+1, out_col_idx], pred).item()
+                    val_loss.append(loss)
 
-        # loop over the batch to fill up results dict
-        results_dict = {}
-        for k, exp in enumerate(exps):
-            results_dict[exp] = pd.DataFrame(y_scaler.inverse_transform(pred_array[k]), columns=output_cols[1:-1])
-            results_dict[exp]['id'] = exp
-            results_dict[exp]['Time [s]'] = out_val['Time [s]'].unique()[start_time:]
-            results_dict[exp] = results_dict[exp].reindex(output_cols, axis=1)
-
-        preds = pd.concat(results_dict.values())
-        truth = out_val.loc[out_val['id'].isin(exps)]
-        truth = truth.sort_values(['id', 'Time [s]']).reset_index(drop=True)
-        preds = preds.sort_values(['id', 'Time [s]']).reset_index(drop=True)
-
-        start_time_cond = truth['Time [s]'].isin(out_val['Time [s]'].unique()[start_time:])
-        truth = truth[start_time_cond]
-
-        # Check for instabilities
-        preds = preds.copy()
-        preds['Precursor [ug/m3]'] = 10**(preds['Precursor [ug/m3]'])
-        truth['Precursor [ug/m3]'] = 10**(truth['Precursor [ug/m3]'])
-        unstable = preds.groupby('id')['Precursor [ug/m3]'].apply(
-            lambda x: x[(x > stable_thresh) | (x < -stable_thresh)].any())
-        stable_exps = unstable[unstable == False].index
-        failed_exps = unstable[unstable == True].index
-        c1 = ~truth["id"].isin(failed_exps)
-        c2 = ~preds["id"].isin(failed_exps)
+        # put results into pandas df, first select indices relevant to the start time
+        idx = out_array.index
+        start_time_units = sorted(list(set([x[0] for x in idx])))[start_time]
+        start_time_condition = [x[0] >= start_time_units for x in idx]
+        idx = out_array[start_time_condition].index
+                
+        raw_box_preds = pd.DataFrame(
+            data=pred_array.reshape(-1, len(output_cols)),
+            columns=output_cols, 
+            index=idx
+        )
         
-        if c2.sum() == 0:
-            box_mae = 1.0
-        else:
-            box_mae = mean_absolute_error(preds[c2].iloc[:, 1:-1], truth[c1].iloc[:, 1:-1])
-        box_loss_mae.append(box_mae)
+        # inverse transform 
+        truth, preds = inv_transform_preds(
+            raw_preds=raw_box_preds,
+            truth=out_array[start_time_condition],
+            y_scaler=y_scaler,
+            log_trans_cols=log_trans_cols,
+            tendency_cols=tendency_cols)
+                
+        # Accumulate the results for each box simulation for different starting times
+        all_preds.append(preds)
+        all_truths.append(truth)
         
-    box_mae = np.mean(box_loss_mae)
-    scaled_box_mae = np.mean(epoch_loss)
-    
-    return scaled_box_mae, box_mae, preds, truth
+        # Accumulate the step losses across different starting times
+        total_loss += val_loss
+        
+    all_preds = pd.concat(all_preds)
+    all_truths = pd.concat(all_truths)
+    metrics = ensembled_metrics(y_true=all_truths,
+                                y_pred=all_preds,
+                                member=0,
+                                output_vars=output_cols,
+                                stability_thresh=stable_thresh)
+    mean_box_mae = metrics['mean_mae'].mean()
+    mean_step_loss = np.sum(total_loss)
+
+    return mean_step_loss, mean_box_mae, metrics, all_preds, all_truths

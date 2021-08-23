@@ -8,7 +8,7 @@ from sklearn.preprocessing import StandardScaler, RobustScaler, MaxAbsScaler, Mi
 scalers = {"MinMaxScaler": MinMaxScaler,
            "StandardScaler": StandardScaler}
 
-def load_data(path, aggregate_bins, species, input_columns, output_columns):
+def load_data(path, aggregate_bins, species, input_columns, output_columns, log_trans_cols):
     """
 
     Args:
@@ -27,7 +27,7 @@ def load_data(path, aggregate_bins, species, input_columns, output_columns):
     else:
         data_type = 'binned'
     data = {}
-    for partition in ['train_in', 'train_out', 'val_in', 'val_out']:
+    for partition in ['train_in', 'train_out', 'val_in', 'val_out']:#, 'test_in', 'test_out']:
         if 'AWS:' in path:
             aws_path = path.split('AWS:')[-1]
             data[partition] = pd.read_parquet(fs.open(join(aws_path, f'{species}_{partition}_{data_type}.parquet'))) \
@@ -40,7 +40,10 @@ def load_data(path, aggregate_bins, species, input_columns, output_columns):
         elif '_out in partition':
             data[partition] = data[partition][output_columns]
 
-        data[partition] = data[partition].groupby('id').apply(lambda x: x.iloc[1:, :]).reset_index(level=2, drop=True)
+        gas_log = any(["Gas" in x for x in log_trans_cols])
+        aero_log = any(["Aerosol" in x for x in log_trans_cols])
+        if gas_log or aero_log:
+            data[partition] = data[partition].groupby('id').apply(lambda x: x.iloc[1:, :]).reset_index(level=2, drop=True)
 
     return data
 
@@ -57,7 +60,7 @@ def transform_data(data, out_path, species, tendency_cols, log_trans_cols, scale
         numpy array of transformed and scaled data.
     """
     transformed_data = {}
-    partitions = ['train_in', 'train_out', 'val_in', 'val_out']
+    partitions = ['train_in', 'train_out', 'val_in', 'val_out']#, 'test_in', 'test_out']
     for p in partitions:
 
         transformed_data[p] = get_tendencies(data[p], tendency_cols)
