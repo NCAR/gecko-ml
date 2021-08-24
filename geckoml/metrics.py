@@ -222,7 +222,6 @@ def plot_ensemble(truth, preds, output_path, output_vars, species, model_name):
 
     for i, exp in enumerate(exps):
         for j, var in enumerate(output_vars):
-            t_sub.to_csv(join(output_path, 'plots/tsubt.csv'))
             t = t_sub.loc[t_sub['id'] == exp, var].values
             axes[j, i].plot(t, linestyle='--', color='k', linewidth=3, label='True')
             if j == 0:
