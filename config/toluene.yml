@@ -1,25 +1,15 @@
 species: 'toluene'
-dir_path: '/glade/p/cisl/aiml/gecko/ML2019_toluene_postproc_NEW'
-output_path: '/glade/work/cbecker/tolutne_binned_runs'
-summary_file: 'TOLUENE_Exp_List_ML2019_toluene_v1_LatinHyperCube.csv'
+dir_path: '/glade/p/cisl/aiml/gecko/partition_data/'
+# dir_path: 'AWS:ncar-aiml-data-commons/gecko/' #use prefix 'AWS:' if path is AWS bucket
+output_path: '/home/cbecker/gecko_toluene_binned_runs'
 aggregate_bins: False
 ensemble_members: 1 # set to 1 for a single run
-seq_length: 20 # only used with recurrent networks
 scaler_type: "StandardScaler"
-min_scale_range: -1
-max_scale_range: 1
-bin_prefix: ['Gas [ug/m3]', 'Aerosol [ug_m3]']
-train_start_exp: 0
-train_end_exp: 1599
-val_start_exp: 1600
-val_end_exp: 1799
-test_start_exp: 1800
-test_end_exp: 1999
+bin_prefix: [ 'Gas [ug/m3]', 'Aerosol [ug_m3]' ]
 box_val_exps: 'all'
 random_seed: 8886
 input_vars:
-    ['Time [s]',
-    'Precursor [ug/m3]',
+    ['Precursor [ug/m3]',
     'Gas [ug/m3] Bin01: lg(C*) = -6.5',
     'Gas [ug/m3] Bin02: lg(C*) = -5.5',
     'Gas [ug/m3] Bin03: lg(C*) = -4.5',
@@ -53,12 +43,9 @@ input_vars:
     'pre-existing aerosols (ug/m3)',
     'o3 (ppb)',
     'nox (ppb)',
-    'oh (10^6 molec/cm3)',
-    'id']
+    'oh (10^6 molec/cm3)']
 output_vars:
-    ['Time [s]',
-    'Precursor [ug/m3]',
-    'Gas [ug/m3] Bin01: lg(C*) = -6.5',
+    ['Gas [ug/m3] Bin01: lg(C*) = -6.5',
     'Gas [ug/m3] Bin02: lg(C*) = -5.5',
     'Gas [ug/m3] Bin03: lg(C*) = -4.5',
     'Gas [ug/m3] Bin04: lg(C*) = -3.5',
@@ -85,20 +72,20 @@ output_vars:
     'Aerosol [ug_m3] Bin11: lg(C*) =  3.5',
     'Aerosol [ug_m3] Bin12: lg(C*) =  4.5',
     'Aerosol [ug_m3] Bin13: lg(C*) =  5.5',
-    'Aerosol [ug_m3] Bin14: lg(C*) =  6.5',
-    'id']
-
+    'Aerosol [ug_m3] Bin14: lg(C*) =  6.5']
+log_trans_cols: [ 'Precursor [ug/m3]' ]
+tendency_cols: [ ]
 model_configurations:
-  single_ts_models:
-    dnn_1:
+  MLP:
+    DNN_1:
       hidden_layers: 1
       hidden_neurons: 500
       activation: "leaky"
       output_layers: 1
       output_activation: "linear"
       optimizer: "adam"
-      loss: ["mae"]
-      loss_weights: [1]
+      loss: [ "mse" ]
+      loss_weights: [ 1 ]
       lr: 0.0001
       batch_size: 2048
       use_noise: False
@@ -113,6 +100,6 @@ model_configurations:
       adam_beta_1: 0.9
       adam_beta_2: 0.999
       epsilon: 0.0000001
-      decay: 0.00001
-      verbose:  1
+      decay: 0
+      verbose: 1
       classifier: False

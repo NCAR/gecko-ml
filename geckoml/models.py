@@ -2,20 +2,14 @@ from tensorflow.keras.layers import (Input, Dense, Dropout, GaussianNoise,
                                      Activation, Concatenate, BatchNormalization, 
                                      LSTM, Conv1D, AveragePooling1D, MaxPooling1D, 
                                      LeakyReLU)
-
+from tensorflow.keras.models import Model
 from tensorflow.keras.regularizers import l1, l2, l1_l2
 from tensorflow.keras.optimizers import Adam, SGD
-from keras_self_attention import SeqSelfAttention
-from tensorflow.keras.models import Model
-
 import tensorflow.keras.backend as K
-import tensorflow as tf
 import xarray as xr
-import pandas as pd
 import numpy as np
 import logging
 import os
-
 import torch.nn.init as init
 import torch.nn as nn
 import torch

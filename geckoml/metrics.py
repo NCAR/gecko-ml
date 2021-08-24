@@ -1,6 +1,4 @@
-from sklearn.metrics import mean_squared_error, mean_absolute_error
-
-import os
+from sklearn.metrics import mean_squared_error, mean_absolute_error, mean_absolute_percentage_error
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -12,7 +10,6 @@ from os.path import join
 from scipy.stats import pearsonr
 
 from scipy.signal import tukey
-from numpy.fft import fft, fftshift
 from numpy.fft import rfft, rfftfreq
 
 
@@ -115,7 +112,7 @@ def get_outliers(preds, truth, cols, n_extremes=10):
 
     return best_exps, worst_exps
 
-def get_stability(preds, stability_thresh):
+def get_stability(preds, stability_thresh, output_cols):
     """
     Determine if any value has crossed the positive or negative magnitude of threshold and lable unstable if true
     Args:
@@ -126,7 +123,7 @@ def get_stability(preds, stability_thresh):
         stable_exps (list)
         unstable_exps (list)
     """
-    unstable = preds.groupby('id')['Precursor [ug/m3]'].apply(
+    unstable = preds.groupby('id')[output_cols].apply(
         lambda x: x[(x > stability_thresh) | (x < -stability_thresh)].any())
     stable_exps = unstable[unstable == False].index
     unstable_exps = unstable[unstable == True].index
@@ -134,7 +131,7 @@ def get_stability(preds, stability_thresh):
     return stable_exps, unstable_exps
 
 
-def ensembled_metrics(y_true, y_pred, member, stability_thresh=1):
+def ensembled_metrics(y_true, y_pred, member, output_vars, stability_thresh=5):
     """ Call a variety of metrics to be calculated (Hellenger distance R2, and RMSE currently) on Box emulator results.
         If bins were not aggregated, all bins are summed before metrics are calculated.
     Args:
@@ -144,35 +141,37 @@ def ensembled_metrics(y_true, y_pred, member, stability_thresh=1):
         metrics (pd.dataframe): results for 'Precursor', 'Gas', and 'Aerosol' for a variety of metrics 
     """
     y_pred_copy = y_pred.copy()
-    for col in ['Precursor [ug/m3]', 'Gas [ug/m3]', 'Aerosol [ug_m3]']:
+    for col in output_vars:
         y_pred_copy = y_pred_copy.groupby('id').filter(
             lambda x: (x[col].max() < stability_thresh) & (x[col].min() > -stability_thresh))
 
-    stable_exps = y_pred_copy['id'].unique()
-    stable_true = y_true[y_true['id'].isin(stable_exps)]
-    n_unstable = y_true['id'].nunique() - stable_true['id'].nunique()
+    stable_exps = y_pred_copy.index.unique(level='id')
+    stable_true = y_true.loc[y_true.index.isin(stable_exps, level='id')]
+    if len(stable_true.index.unique(level='id')) == 0:
+        raise ValueError('No stable experiments to calculate metrics on! Aborting.')
+    n_unstable = len(y_true.index.unique(level='id')) - len(stable_true.index.unique(level='id'))
 
     df = pd.DataFrame(columns=['ensemble_member', 'mass_phase', 'mean_mse', 'mean_mae', 'Mean % MAE', 'mean_r2',
                                'mean_pearson', 'mean_hd', 'n_val_exps', 'n_unstable'])
 
-    for col in y_true.columns[1:-1]:
-        
+    for col in y_pred.columns:
+
         l = []
         l.append(member)
         l.append(col) 
         l.append(mean_squared_error(stable_true[col], y_pred_copy[col]))
         l.append(mean_absolute_error(stable_true[col], y_pred_copy[col]))
-        l.append(((stable_true[col] -  y_pred_copy[col]).abs() / stable_true[col] * 100).mean())
+        l.append(mean_absolute_percentage_error(stable_true[col], y_pred_copy[col]))
         l.append(r2_corr(stable_true[col], y_pred_copy[col]))
         l.append(pearsonr(stable_true[col], y_pred_copy[col])[0])
         l.append(hellinger_distance(stable_true[col], y_pred_copy[col]))
 
-        temp_df = pd.DataFrame(data={'t': stable_true[col].values, 'p': y_pred_copy[col].values, 'id': stable_true['id']})
+        temp_df = pd.DataFrame(data={'t': stable_true[col].values, 'p': y_pred_copy[col].values,
+                                     'id': stable_true.index.get_level_values(level='id')})
         l.append(temp_df['id'].nunique())
         l.append(n_unstable)
 
         df = df.append(pd.DataFrame([l], columns=df.columns))
-
     return df
 
 
@@ -203,7 +202,7 @@ def match_true_exps(truth, preds, num_timesteps, seq_length, aggregate_bins, bin
     return true_sub, preds
 
 
-def plot_ensemble(truth, preds, output_path, species, model_name):
+def plot_ensemble(truth, preds, output_path, output_vars, species, model_name):
     """ Plot ensemble members, ensemble mean, and truth from 3 randomly selected experiments.
     Args:
         truth: Validation dataframe for selected experiments
@@ -214,31 +213,30 @@ def plot_ensemble(truth, preds, output_path, species, model_name):
     """
     all_exps = truth['id'].unique()
     exps = np.random.choice(all_exps, 3, replace=False)
-    color = ['r', 'b', 'g']
-    mean_ensemble = pd.concat([x for x in preds.values()]).groupby(level=0).mean()
-    mean_ensemble['id'] = truth['id']
-    fig, axes = plt.subplots(3, 3, figsize=(20, 16), sharex='col', sharey='row',
+    color = ['darkred', 'darkblue', 'darkgreen']
+    mean_ensemble = preds.groupby(['Time [s]', 'id']).mean()[output_vars]
+    fig, axes = plt.subplots(len(output_vars), 3, figsize=(20, 16), sharex='col', sharey='row',
                              gridspec_kw={'hspace': 0, 'wspace': 0})
     fig.suptitle('Ensemble Runs - {} - {}'.format(species, model_name), fontsize=30)
+    t_sub = truth[truth['member'] == 0]
 
-    for i in range(3):
-        for j in range(3):
-            t = truth[truth['id'] == exps[j]].iloc[:, i + 1].values
-            axes[i, j].plot(t, linestyle='--', color='k', linewidth=2, label='True')
-            if i == 0:
-                axes[i, j].set_title(exps[j], fontsize=22)
+    for i, exp in enumerate(exps):
+        for j, var in enumerate(output_vars):
+            t = t_sub.loc[t_sub['id'] == exp, var].values
+            axes[j, i].plot(t, linestyle='--', color='k', linewidth=3, label='True')
             if j == 0:
-                axes[i, j].set_ylabel(truth.columns[i+1], fontsize=20)
-            dummy_i = 0
-            for key, value in preds.items():
-                p = preds[key][preds[key]['id'] == exps[j]].iloc[:, i + 1].values
-                if dummy_i == 0:
-                    axes[i, j].plot(p, linewidth=0.3, color=color[j], label='Ensemble Member')
+                axes[j, i].set_title(exp, fontsize=22)
+            if i == 0:
+                axes[j, i].set_ylabel(var, fontsize=20)
+            for member in preds['member'].unique():
+                p = preds.loc[preds['member'] == member]
+                p_sub = p.loc[p['id'] == exp, var].values
+                if member == 0:
+                    axes[j, i].plot(p_sub, linewidth=0.3, color=color[j], label='Ensemble Member')
                 else:
-                    axes[i, j].plot(p, linewidth=0.3, color=color[j], label='')
-                dummy_i += 1
-            m = mean_ensemble[mean_ensemble['id'] == exps[j]].iloc[:, i + 1].values
-            axes[i, j].plot(m, color=color[j], linewidth=2, label='Ensemble Mean')
+                    axes[j, i].plot(p_sub, linewidth=0.3, color=color[j], label='')
+            m = mean_ensemble.loc[mean_ensemble.index.get_level_values('id') == exp, var].values
+            axes[j, i].plot(m, color=color[j], linewidth=3, label='Ensemble Mean')
     for i in range(3):
         axes[0, i].legend()
 
@@ -305,7 +303,7 @@ def plot_bootstrap_ci(truth, preds, columns, output_path, species, model_name, n
 
        """
     if only_stable:
-        stable_exps = get_stability(preds, stable_thresh)[0]
+        stable_exps = get_stability(preds, stable_thresh, columns)[0]
         truth = truth[truth['id'].isin(stable_exps)]
         preds = preds[preds['id'].isin(stable_exps)]
         truth = truth[truth['member'] == 0]
@@ -323,7 +321,7 @@ def plot_bootstrap_ci(truth, preds, columns, output_path, species, model_name, n
 
     for i, ax in enumerate(axs.ravel()):
 
-        colors = ['r', 'g', 'b']
+        colors = ['darkred', 'darkblue', 'darkgreen']
         time = mean_truth.index / 60 / 60 / 24
         ax.xaxis.set_tick_params(labelsize=16)
         ax.plot(time, mean_err[columns[i]], color=colors[i], lw=3, label=columns[i])
@@ -345,7 +343,7 @@ def plot_bootstrap_ci(truth, preds, columns, output_path, species, model_name, n
 
     for i, ax in enumerate(axs.ravel()):
 
-        colors = ['r', 'g', 'b']
+        colors = ['darkred', 'darkblue', 'darkgreen']
         time = mean_truth.index / 60 / 60 / 24
         ax.xaxis.set_tick_params(labelsize=16)
         ax.plot(time, mean_truth[columns[i]], color=colors[i], lw=3, label=columns[i])
@@ -444,7 +442,7 @@ def plot_crps_bootstrap(truth, preds, columns, output_path, species, model_name,
     Returns:
     """
     if only_stable:
-        stable_exps = get_stability(preds, stable_thresh)[0]
+        stable_exps = get_stability(preds, stable_thresh, columns)[0]
         truth = truth[truth['id'].isin(stable_exps)]
         preds = preds[preds['id'].isin(stable_exps)]
 
@@ -458,7 +456,7 @@ def plot_crps_bootstrap(truth, preds, columns, output_path, species, model_name,
     for i, phase in enumerate(crps.keys()):
         if phase == 'Precursor [ug/m3]':
             ax[i].set_yscale('log')
-        colors = ['r', 'g', 'b']
+        colors = ['darkred', 'darkblue', 'darkgreen']
         ax[i].xaxis.set_tick_params(labelsize=16)
         ax[i].plot(time, crps[phase], color=colors[i], lw=3, label=f'Mean {phase} CRPS')
         ax[i].plot(time, lower_ci[phase], color='k', lw=1)
@@ -474,7 +472,7 @@ def plot_crps_bootstrap(truth, preds, columns, output_path, species, model_name,
         plt.savefig(join(output_path, f'plots/{species}_CRPS_{model_name}.png'), bbox_inches='tight')
 
 
-def plot_unstability(preds, columns, output_path, model_name, stability_thresh=1):
+def plot_unstability(preds, columns, output_path, model_name, stability_thresh=10):
     """
     Plot unstable runs by timestep for each mass phase specified
     Args:
@@ -489,7 +487,7 @@ def plot_unstability(preds, columns, output_path, model_name, stability_thresh=1
 
     total_runs = int(len(preds) / preds['Time [s]'].nunique())
     time = preds['Time [s]'].unique() / 60 / 60 / 24
-    colors = ['lightblue', 'red', 'green']
+    colors = ['red', 'lightblue', 'green']
     plt.figure(figsize=(24, 8))
     plt.tick_params(axis='both', labelsize=18)
 
@@ -564,6 +562,21 @@ def plot_scatter_analysis(preds, truth, train, val, cols, output_path, species, 
     cb.set_label(label=hue, weight='bold', size=24)
     plt.suptitle(f'{species.capitalize()} - {model_name.upper()}', fontsize=50, y=1.08)
     plt.savefig(join(output_path, f'plots/scatter_analysis_{model_name}_{species}.png'), bbox_inches='tight')
+
+
+def save_analysis_plots(all_truth, all_preds, train_input, val_input, output_path, output_vars, species, model_name):
+
+
+    all_truth.reset_index(inplace=True)
+    all_preds.reset_index(inplace=True)
+    all_truth['member'] = all_preds['member']
+    plot_ensemble(all_truth, all_preds, output_path, output_vars, species, model_name)
+    plot_bootstrap_ci(all_truth, all_preds, output_vars, output_path, species, model_name)
+    plot_crps_bootstrap(all_truth, all_preds, output_vars, output_path, species, model_name)
+    plot_unstability(all_preds, output_vars, output_path, model_name)
+    plot_scatter_analysis(all_preds, all_truth, train_input, val_input, output_vars,
+                          output_path, species, model_name)
+    #fourier_analysis(all_preds, output_path, species, model_name)
     
     
 def fourier_analysis(preds, output_path, species, model_name):
@@ -615,12 +628,12 @@ def fourier_analysis(preds, output_path, species, model_name):
                 plt.subplot(3, 2, 1 + g)
                 plt.plot( t_gtrend_orig, a_gtrend_orig, label=f'raw {name} data', c = "k"  )
                 plt.plot( t_gtrend_orig, a_gtrend_windowed, label='windowed data', c = "r"  )
-                plt.xlabel( 'secs' )
-                plt.ylabel( column_name.replace("ug_m3", "ug/m3") )
+                plt.xlabel('secs')
+                plt.ylabel(column_name.replace("ug_m3", "ug/m3") )
                 plt.title(f"Experiment {exp_id}")
                 plt.legend()
 
-            a_gtrend_psd = abs(rfft(a_gtrend_orig ))
+            a_gtrend_psd = abs(rfft(a_gtrend_orig))
             a_gtrend_psdtukey = abs(rfft(a_gtrend_windowed))
             a_gtrend_freqs = rfftfreq(len(a_gtrend_orig), d = dt)
 
@@ -655,3 +668,15 @@ def fourier_analysis(preds, output_path, species, model_name):
     plt.tight_layout()
     plt.savefig(os.path.join(output_path, f"plots/{species}_fourier_analysis_{model_name}.pdf"), dpi = 300)
     plt.show()
+
+
+def sum_bins(truth, preds, bin_prefix):
+    """" Add new columns for the sums of the predicted bins by mass for ease of plotting.
+    Args:
+        truth (df): Truth dataframe
+        preds (df): Predictions dataframe
+        bin_prefix (list): Bin prefixes to search for bins
+    """
+    for prefix in bin_prefix:
+        preds[prefix] = preds.loc[:, preds.columns.str.contains(prefix, regex=False)].sum(axis=1)
+    return truth, preds
