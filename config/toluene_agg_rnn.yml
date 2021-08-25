@@ -26,8 +26,8 @@ log_trans_cols: ['Precursor [ug/m3]']
 tendency_cols: []
 
 model_configurations:
-  single_ts_models:
-    gru:
+  RNN:
+    GRU_1:
       hidden_size: 1215
       n_layers: 1
       lr: 6.926089154379343e-05
