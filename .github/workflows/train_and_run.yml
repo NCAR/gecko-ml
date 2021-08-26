@@ -25,9 +25,9 @@ jobs:
           
       - name: Run the gecko train script
         run: |
-          which python
-          echo $PATH
           conda activate gecko
-          conda list
-          pwd
           python applications/train_gecko_emulators.py -c config/ci_config.yml
+      - name: Run the gecko box model script
+        run: |
+          conda activate gecko
+          python applications/run_gecko_emulators.py -c config/ci_config.yml
