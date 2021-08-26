@@ -49,5 +49,5 @@ model_configurations:
       adam_beta_2: 0.999
       epsilon: 1.0e-07
       decay: 0
-      verbose:  0
+      verbose:  1
       classifier: False
