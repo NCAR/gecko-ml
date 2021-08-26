@@ -29,5 +29,5 @@ jobs:
           echo $PATH
           conda activate gecko
           conda list
-          python applications/train_gecko_emulators.py -c config/ci_config.yml
-          python applications/run_gecko_emulators.py -c config/ci_config.yml
+          echo $USER
+          sudo python applications/train_gecko_emulators.py -c config/ci_config.yml
