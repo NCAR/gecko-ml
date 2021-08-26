@@ -1,0 +1,33 @@
+name: GECKO-CI
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash -l {0}
+
+    steps:
+      - uses: actions/checkout@v2
+      - uses: conda-incubator/setup-miniconda@v2
+        with:
+          channel-priority: true
+          auto-activate-base: false
+          activate-environment: gecko
+          environment-file: environment.yml
+          
+      - name: Run the gecko train script
+        run: |
+          conda activate gecko
+          python applications/train_gecko_emulators.py -c config/ci_config.yml
+      - name: Run the gecko box model script
+        run: |
+          conda activate gecko
+          python applications/run_gecko_emulators.py -c config/ci_config.yml

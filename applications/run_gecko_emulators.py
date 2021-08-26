@@ -34,7 +34,7 @@ def main():
     scaler_type = config['scaler_type']
     bin_prefix = config['bin_prefix']
 
-    data = load_data(data_path, aggregate_bins, species, input_vars, output_vars)
+    data = load_data(data_path, aggregate_bins, species, input_vars, output_vars, log_trans_cols)
     transformed_data, x_scaler, y_scaler = transform_data(data, output_path, species, tendency_cols, log_trans_cols,
                                                           scaler_type, output_vars, train=False)
 
