@@ -1,7 +1,7 @@
 species: 'toluene'
 # dir_path: '/glade/p/cisl/aiml/gecko/partition_data/'
 dir_path: 'AWS:ncar-aiml-data-commons/gecko/' #use prefix 'AWS:' if path is AWS bucket
-output_path: '/test_output/'
+output_path: './test_output/'
 aggregate_bins: True
 ensemble_members: 2 # set to 1 for a single run
 scaler_type: "StandardScaler"
