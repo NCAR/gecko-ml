@@ -2,7 +2,7 @@ name: GECKO-CI
 
 on:
   push:
-    branches: [ GH_Actions_CI ]
+    branches: [ master ]
   pull_request:
     branches: [ master ]
   workflow_dispatch:
