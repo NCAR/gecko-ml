@@ -194,7 +194,7 @@ if __name__ == '__main__':
     ############################################################
     
     root = logging.getLogger()
-    root.setLevel("main")
+    root.setLevel(logging.DEBUG)
     formatter = logging.Formatter('%(levelname)s:%(name)s:%(message)s')
 
     # Stream output to stdout
