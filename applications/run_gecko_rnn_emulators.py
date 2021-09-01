@@ -179,7 +179,7 @@ if __name__ == '__main__':
     
     args_dict = vars(parser.parse_args())
     config_file = args_dict.pop("model_config")
-    workers = int(args_dict.pop("workers"))
+    threads = int(args_dict.pop("threads"))
     
     if not os.path.isfile(config_file):
         logger.warning(f"The model config does not exist at {config_file}. Failing with error.")
@@ -189,7 +189,7 @@ if __name__ == '__main__':
         conf = yaml.load(cf, Loader=yaml.FullLoader)
         
     # How many CPUs available for multiprocessing
-    n_cpus = min(os.cpu_count(), workers)
+    n_cpus = min(os.cpu_count(), threads)
 
     ############################################################
     
@@ -293,7 +293,7 @@ if __name__ == '__main__':
     
     ### STOPPED HERE
     n_cpus = min(ensemble_members, n_cpus)
-    logger.info(f"Using {n_cpus} workers to run box simulations for {ensemble_members} GRU ensemble members")
+    logger.info(f"Using {n_cpus} threads to run box simulations for {ensemble_members} GRU ensemble members")
     
     truth = {}
     predictions = {}
