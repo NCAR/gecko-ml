@@ -1,24 +1,14 @@
 species: 'dodecane'
-dir_path: '/glade/p/cisl/aiml/gecko/ML2019_dodecane_postproc/'
-output_path: '/glade/work/cbecker/dodecane_agg_runs'
-summary_file: 'C02000_Exp_List_ML2019_dodecane_v1_LatinHyperCube.csv'
+dir_path: '/glade/p/cisl/aiml/gecko/partition_data/'
+# dir_path: 'AWS:ncar-aiml-data-commons/gecko/' #use prefix 'AWS:' if path is AWS bucket
+output_path: '/home/cbecker/gecko_dodecane_agg_runs'
 aggregate_bins: True
 ensemble_members: 1 # set to 1 for a single run
-seq_length: 20 # only used with recurrent networks
-scaler_type: "MinMaxScaler"
-min_scale_range: 0
-max_scale_range: 1
+scaler_type: "StandardScaler"
 bin_prefix: ['Gas [ug/m3]', 'Aerosol [ug_m3]']
-train_start_exp: 0
-train_end_exp: 1599
-val_start_exp: 1600
-val_end_exp: 1799
-test_start_exp: 1800
-test_end_exp: 1999
 box_val_exps: 'all'
 random_seed: 8886
 input_vars: [
-    'Time [s]',
     'Precursor [ug/m3]',
     'Gas [ug/m3]',
     'Aerosol [ug_m3]',
@@ -27,35 +17,33 @@ input_vars: [
     'pre-existing aerosols (ug/m3)',
     'o3 (ppb)',
     'nox (ppb)',
-    'oh (10^6 molec/cm3)',
-    'id']
+    'oh (10^6 molec/cm3)']
 output_vars: [
-    'Time [s]',
-    'Precursor [ug/m3]',
     'Gas [ug/m3]',
-    'Aerosol [ug_m3]',
-    'id']
+    'Aerosol [ug_m3]']
+log_trans_cols: ['Precursor [ug/m3]']
+tendency_cols: []
 model_configurations:
-  single_ts_models:
-    dnn_1:
+  MLP:
+    DNN_1:
       hidden_layers: 1
       hidden_neurons: 500
       activation: "leaky"
       output_layers: 1
       output_activation: "linear"
       optimizer: "adam"
-      loss: ["mae"]
+      loss: ["mse"]
       loss_weights: [1]
-      lr: 0.000005
-      batch_size: 8192
+      lr: 0.0001
+      batch_size: 2048
       use_noise: False
       noise_sd: 0.01
-      epochs: 1
+      epochs: 100
       use_dropout: False
       dropout_alpha: 0.1
-      kernel_reg: 'l2'
-      l1_weight: 0.001
-      l2_weight: 0.001
+      kernel_reg: 'l1_l2'
+      l1_weight: 0.00001
+      l2_weight: 0.0000001
       sgd_momentum: 0.9
       adam_beta_1: 0.9
       adam_beta_2: 0.999
@@ -63,30 +51,4 @@ model_configurations:
       decay: 0
       verbose:  1
       classifier: False
-  multi_ts_models:
-    lstm_1:
-      hidden_layers: 1
-      hidden_neurons: 100
-      activation: "tanh"
-      output_layers: 3
-      output_activation: "tanh"
-      optimizer: "adam"
-      loss: [ "mae", "mse", "mse" ]
-      loss_weights: [ 1, 20, 50 ]
-      lr: 0.00005
-      batch_size: 2048
-      use_noise: False
-      noise_sd: 0.01
-      epochs: 5
-      use_dropout: False
-      dropout_alpha: 0.1
-      l2_weight: 0.001
-      sgd_momentum: 0.9
-      adam_beta_1: 0.9
-      adam_beta_2: 0.999
-      epsilon: 0.0000001
-      decay: 0
-      verbose: 1
-      classifier: False
-
 

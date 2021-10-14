@@ -1,15 +1,12 @@
 #!/bin/bash -l
-#SBATCH --job-name=gecko-ml
-#SBATCH --account=NAML0001
-#SBATCH --time=00:50:00
-#SBATCH --partition=dav
-#SBATCH --nodes=2
-#SBATCH --ntasks=100
-#SBATCH --ntasks-per-node=50
-#SBATCH --mem=256G
-#SBATCH -o ./run.txt
-#SBATCH -e ./run.txt
-module load ncarenv/1.3 gnu/8.3.0 openmpi/3.1.4 cuda/10.0 python/3.7.5
+#PBS -N gecko-ml
+#PBS -A NAML0001
+#PBS -l walltime=00:30:00
+#PBS -q casper
+#PBS -l select=1:ncpus=8:mem=64GB
+#PBS -o ./run.txt
+#PBS -e ./run.txt
+module load cuda/11 cudnn
+conda activate gecko
 cd /glade/work/$USER/gecko-ml/applications/
-ncar_pylib ncar_20191211
-python run_gecko_emulators.py -c ../config/dodecane_agg.yml >& ./run.txt
+python run_gecko_emulators.py -c ../config/toluene_agg.yml >& ./run.txt
