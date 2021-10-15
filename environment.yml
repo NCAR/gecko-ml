@@ -26,6 +26,7 @@ dependencies:
   - pip
   - s3fs
   - pyarrow
+  - flake8
   - pip:
     - tensorflow
     - torch
