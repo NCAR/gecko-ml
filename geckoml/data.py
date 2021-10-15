@@ -3,7 +3,7 @@ import pandas as pd
 from os.path import join
 import s3fs
 import joblib
-from sklearn.preprocessing import StandardScaler, RobustScaler, MaxAbsScaler, MinMaxScaler
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
 
 scalers = {"MinMaxScaler": MinMaxScaler,
            "StandardScaler": StandardScaler}
@@ -197,6 +197,9 @@ def save_scaler_csv(scaler_obj, input_columns, output_path, species, scaler_type
                                        index=input_columns)
     elif scaler_type == 'MinMaxScaler':
         input_scaler_df = pd.DataFrame({"min": scaler_obj.min_, "scale": scaler_obj.scale_},
+                                       index=input_columns)
+    else:
+        input_scaler_df = pd.DataFrame({"mean": [np.nan] * len(input_columns), "scale": [np.nan] * len(input_columns)},
                                        index=input_columns)
     input_scaler_df.to_csv(join(output_path, f'models/{species}_scale_values.csv'), index_label="input")
     return

@@ -1,5 +1,6 @@
-from sklearn.metrics import mean_squared_error, mean_absolute_error, mean_absolute_percentage_error
 import matplotlib
+from sklearn.metrics import mean_squared_error, mean_absolute_error, mean_absolute_percentage_error
+
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -87,6 +88,7 @@ def get_outliers(preds, truth, cols, n_extremes=10):
     Returns: best/worst experiments from box simulation (list)
 
     """
+
     def mae_wrap(df, cols):
         pred_cols = [x + '_pred' for x in cols]
         MAE = mean_absolute_error(df[cols], df[pred_cols])
@@ -111,6 +113,7 @@ def get_outliers(preds, truth, cols, n_extremes=10):
     worst_exps[:len(inf_exps)] = inf_exps
 
     return best_exps, worst_exps
+
 
 def get_stability(preds, stability_thresh, output_cols):
     """
@@ -155,10 +158,9 @@ def ensembled_metrics(y_true, y_pred, member, output_vars, stability_thresh=5):
                                'mean_pearson', 'mean_hd', 'n_val_exps', 'n_unstable'])
 
     for col in y_pred.columns:
-
         l = []
         l.append(member)
-        l.append(col) 
+        l.append(col)
         l.append(mean_squared_error(stable_true[col], y_pred_copy[col]))
         l.append(mean_absolute_error(stable_true[col], y_pred_copy[col]))
         l.append(mean_absolute_percentage_error(stable_true[col], y_pred_copy[col]))
@@ -389,7 +391,7 @@ def crps_ens_bootstrap(truth, preds, columns, n_bs_samples=1000, ci_level=0.95):
     """
     truth = truth.set_index(['member', 'id'])
     preds = preds.set_index(['member', 'id'])
-    
+
     num_exps = truth.index.levels[1].nunique()
     time_steps = truth['Time [s]'].unique()
     min_quant = (1 - ci_level) / 2
@@ -565,8 +567,6 @@ def plot_scatter_analysis(preds, truth, train, val, cols, output_path, species, 
 
 
 def save_analysis_plots(all_truth, all_preds, train_input, val_input, output_path, output_vars, species, model_name):
-
-
     all_truth.reset_index(inplace=True)
     all_preds.reset_index(inplace=True)
     all_truth['member'] = all_preds['member']
@@ -576,11 +576,10 @@ def save_analysis_plots(all_truth, all_preds, train_input, val_input, output_pat
     plot_unstability(all_preds, output_vars, output_path, model_name)
     plot_scatter_analysis(all_preds, all_truth, train_input, val_input, output_vars,
                           output_path, species, model_name)
-    #fourier_analysis(all_preds, output_path, species, model_name)
-    
-    
+    # fourier_analysis(all_preds, output_path, species, model_name)
+
+
 def fourier_analysis(preds, output_path, species, model_name):
-    
     """
     Produce plots of the fourier transform of experiments in frequency space.
     All binned columns will be aggregated before performing the analysis.
@@ -594,18 +593,17 @@ def fourier_analysis(preds, output_path, species, model_name):
     # Average over the ensembles
     preds = preds.groupby(["id", "Time [s]"])
     preds = preds.mean()
-    preds = preds.reset_index().drop(columns = ["member"])
-    
-    
+    preds = preds.reset_index().drop(columns=["member"])
+
     names = ["gas", "aerosol"]
     column_names = ["Gas [ug/m3]", "Aerosol [ug_m3]"]
-    
+
     # Collapse binned data into aggregate quantities
     if column_names[0] not in preds.columns or column_names[1] not in preds.columns:
         preds[column_names[0]] = preds.loc[:, preds.columns.str.contains("Gas", regex=False)].sum(axis=1)
         preds[column_names[1]] = preds.loc[:, preds.columns.str.contains("Aerosol", regex=False)].sum(axis=1)
     preds = preds[['Time [s]', 'Precursor [ug/m3]', 'Gas [ug/m3]', 'Aerosol [ug_m3]', 'id']]
-    
+
     val_exps = preds["id"].unique()
     bulk = np.zeros((len(val_exps), 719))
 
@@ -622,27 +620,27 @@ def fourier_analysis(preds, output_path, species, model_name):
             dt = t_gtrend_orig.iloc[1] - t_gtrend_orig.iloc[0]
             exp_id = exp.replace("Exp", "")
 
-            a_gtrend_windowed = (a_gtrend_orig-np.median(a_gtrend_orig ))*tukey( len(a_gtrend_orig) )
+            a_gtrend_windowed = (a_gtrend_orig - np.median(a_gtrend_orig)) * tukey(len(a_gtrend_orig))
 
             if exp == "Exp1601" or exp == "Exp1801":
                 plt.subplot(3, 2, 1 + g)
-                plt.plot( t_gtrend_orig, a_gtrend_orig, label=f'raw {name} data', c = "k"  )
-                plt.plot( t_gtrend_orig, a_gtrend_windowed, label='windowed data', c = "r"  )
+                plt.plot(t_gtrend_orig, a_gtrend_orig, label=f'raw {name} data', c="k")
+                plt.plot(t_gtrend_orig, a_gtrend_windowed, label='windowed data', c="r")
                 plt.xlabel('secs')
-                plt.ylabel(column_name.replace("ug_m3", "ug/m3") )
+                plt.ylabel(column_name.replace("ug_m3", "ug/m3"))
                 plt.title(f"Experiment {exp_id}")
                 plt.legend()
 
             a_gtrend_psd = abs(rfft(a_gtrend_orig))
             a_gtrend_psdtukey = abs(rfft(a_gtrend_windowed))
-            a_gtrend_freqs = rfftfreq(len(a_gtrend_orig), d = dt)
+            a_gtrend_freqs = rfftfreq(len(a_gtrend_orig), d=dt)
 
             # For the PSD graph, we skip the first two points, this brings us more into a useful scale
             # those points represent the baseline (or mean), and are usually not relevant to the analysis
             if exp == "Exp1601" or exp == "Exp1801":
                 plt.subplot(3, 2, 3 + g)
-                plt.plot( a_gtrend_freqs[1:], a_gtrend_psd[1:], label=f'psd raw {name} data', c = "k"  )
-                plt.plot( a_gtrend_freqs[1:], a_gtrend_psdtukey[1:], label='windowed psd', c = "r"  )
+                plt.plot(a_gtrend_freqs[1:], a_gtrend_psd[1:], label=f'psd raw {name} data', c="k")
+                plt.plot(a_gtrend_freqs[1:], a_gtrend_psdtukey[1:], label='windowed psd', c="r")
                 plt.xlabel('frequency ($sec^{-1}$)')
                 plt.ylabel('Amplitude')
                 plt.xlim([0.0, 0.00005])
@@ -653,20 +651,19 @@ def fourier_analysis(preds, output_path, species, model_name):
 
         ave = np.mean(bulk, 0)
         plt.subplot(3, 2, 5 + g)
-        plt.plot( a_gtrend_freqs[1:], ave, label='mean-windowed psd', c = "r", zorder = 2 )
+        plt.plot(a_gtrend_freqs[1:], ave, label='mean-windowed psd', c="r", zorder=2)
         plt.xlabel('frequency ($sec^{-1}$)')
         plt.ylabel('Average Amplitude')
         plt.title("Average over 200 experiments")
         plt.xlim([0.0, 0.00005])
 
         period = 1. / a_gtrend_freqs[4:][np.argmax(ave[3:])]
-        plt.plot([1./period, 1./period], [min(ave), max(ave)], 
-                 c = 'b', ls = '--', zorder = 1, label = r"$T^{-1} =$ 24 hr")
+        plt.plot([1. / period, 1. / period], [min(ave), max(ave)],
+                 c='b', ls='--', zorder=1, label=r"$T^{-1} =$ 24 hr")
         plt.legend()
 
-
     plt.tight_layout()
-    plt.savefig(join(output_path, f"plots/{species}_fourier_analysis_{model_name}.pdf"), dpi = 300)
+    plt.savefig(join(output_path, f"plots/{species}_fourier_analysis_{model_name}.pdf"), dpi=300)
     plt.show()
 
 

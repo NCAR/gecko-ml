@@ -32,4 +32,6 @@ dependencies:
     - captum
     - shap
     - pyDOE
+    - keras-self-attention
+    - git+https://github.com/NCAR/echo-opt.git
     - .

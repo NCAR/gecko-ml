@@ -5,17 +5,13 @@ from geckoml.box import GeckoBoxEmulator
 from geckoml.metrics import ensembled_metrics
 import logging
 try:
-    from aimlutils.echo.src.base_objective import *
-    from aimlutils.echo.src.pruners import KerasPruningCallback
+    from echo.src.base_objective import *
+    from echo.src.pruners import KerasPruningCallback
 except ModuleNotFoundError:
-    from aimlutils.echo.hyper_opt.base_objective import *
-    from aimlutils.echo.hyper_opt.utils import KerasPruningCallback
-except:
     raise OSError("aimlutils does not seem to be installed, or is not on your python path. Exiting.")
 from geckoml.models import DenseNeuralNetwork
 from tensorflow.python.framework.ops import disable_eager_execution
-from geckoml.callbacks import *
-from tensorflow.keras.callbacks import *
+
 
 warnings.filterwarnings("ignore")
 disable_eager_execution()
@@ -40,7 +36,7 @@ class Objective(BaseObjective):
         scaler_type = conf['scaler_type']
         exps = conf['box_val_exps']
 
-        data = load_data(dir_path, aggregate_bins, species, input_vars, output_vars)
+        data = load_data(dir_path, aggregate_bins, species, input_vars, output_vars, log_trans_cols)
         transformed_data, x_scaler, y_scaler = transform_data(data, None, species, tendency_cols, log_trans_cols,
                                                               scaler_type, output_vars, train=True)
 

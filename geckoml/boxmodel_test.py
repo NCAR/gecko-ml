@@ -11,8 +11,7 @@ import gc
 import tensorflow as tf
 from tensorflow.keras.models import load_model
 from tensorflow.python.framework.ops import disable_eager_execution
-from geckoml.data import combine_data, split_data, reshape_data, partition_y_output, get_output_scaler, \
-    reconstruct_preds, save_metrics
+from geckoml.data import partition_y_output, get_output_scaler, save_metrics
 import os.path
 from os import path
 
@@ -31,7 +30,6 @@ def test_boxmodel():
 # Extract config arguments and validate if necessary
     species = config['species']
     dir_path = config['dir_path']
-    summary_file = config['summary_file']
     aggregate_bins = config['aggregate_bins']
     bin_prefix = config['bin_prefix']
     input_vars = config['input_vars']
