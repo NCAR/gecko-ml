@@ -29,5 +29,7 @@ dependencies:
   - pip:
     - tensorflow
     - torch
-    - keras-self-attention
+    - captum
+    - shap
+    - pyDOE
     - .

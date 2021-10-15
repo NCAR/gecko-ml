@@ -9,7 +9,7 @@ import properscoring as ps
 from os.path import join
 from scipy.stats import pearsonr
 
-from scipy.signal import tukey
+from scipy.signal.windows import tukey
 from numpy.fft import rfft, rfftfreq
 
 
@@ -666,7 +666,7 @@ def fourier_analysis(preds, output_path, species, model_name):
 
 
     plt.tight_layout()
-    plt.savefig(os.path.join(output_path, f"plots/{species}_fourier_analysis_{model_name}.pdf"), dpi = 300)
+    plt.savefig(join(output_path, f"plots/{species}_fourier_analysis_{model_name}.pdf"), dpi = 300)
     plt.show()
 
 
