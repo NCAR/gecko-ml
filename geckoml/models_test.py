@@ -17,12 +17,8 @@ def test_denseneuralnetwork():
 
 #test load data  
 def test_loaddata():
-    df = pd.read_csv("./geckoml/test_data.csv", skiprows=3)
+    df = pd.read_csv("./test_data/test_data.csv", skiprows=3)
     assert not df.isnull().values.any()
     assert not df.isna().values.any()
     assert df.shape[0] == 1437
     assert df.shape[1] == 128
-   
-    
-if __name__ == "__main__":
-    test_denseneuralnetwork()

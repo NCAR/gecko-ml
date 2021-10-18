@@ -27,7 +27,7 @@ jobs:
       - name: Run pytest
         run: |
           conda activate gecko
-          pytest
+          pytest models_test.py
       - name: Run the gecko train script
         run: |
           conda activate gecko
