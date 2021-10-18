@@ -15,12 +15,11 @@ from os.path import join
 def main():
     
     start = time.time()
-    print('BEG')
     parser = argparse.ArgumentParser()
     parser.add_argument("-c", "--config", default="apin_O3.yml", help="Path to config file")
     args = parser.parse_args()
     with open(args.config) as config_file:
-        config = yaml.load(config_file)
+        config = yaml.safe_load(config_file)
 
     species = config['species']
     data_path = config['dir_path']

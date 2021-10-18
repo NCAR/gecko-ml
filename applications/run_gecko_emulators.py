@@ -19,7 +19,7 @@ def main():
                         help="Threads per dask worker (multiprocessing)")
     args = parser.parse_args()
     with open(args.config) as config_file:
-        config = yaml.load(config_file)
+        config = yaml.safe_load(config_file)
 
     species = config['species']
     aggregate_bins = config['aggregate_bins']
