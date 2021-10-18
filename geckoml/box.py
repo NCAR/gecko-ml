@@ -59,6 +59,7 @@ class GeckoBoxEmulator(object):
         batched_array = data_sub.values.reshape(n_exps, n_timesteps, n_features)
         pred_array = np.empty((n_exps, n_timesteps, len(self.output_cols)))
 
+        pred = None
         for time_step in range(n_timesteps):
             if time_step == 0:
                 new_input = batched_array[:, time_step, :]
