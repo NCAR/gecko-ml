@@ -1,10 +1,8 @@
 import warnings
 warnings.filterwarnings("ignore")
-
 import tensorflow as tf
 tf.keras.backend.set_floatx('float64')
 from tensorflow.keras.models import load_model
-
 import matplotlib.pyplot as plt
 import multiprocessing as mp
 import tqdm.auto as tqdm
@@ -15,12 +13,14 @@ import logging
 import joblib
 import torch
 import copy
+import glob
 import yaml
 import shap
 import time
 import yaml
 import sys
 import os 
+from geckoml.data import load_data
 
 from captum.attr import GradientShap
 from geckoml.models import GRUNet
@@ -590,41 +590,27 @@ if __name__ == '__main__':
 
     # Compute SHAP values given a model and data
     # Load conf args
+    dir_path = conf['dir_path']
+    aggregate_bins = conf["aggregate_bins"]
     species = conf['species']
     output_path = conf['output_path']
     exps = conf['box_val_exps']
     input_cols = conf['input_vars']
     output_cols = conf['output_vars']
     columns = ['Precursor [ug/m3]', 'Gas [ug/m3]', 'Aerosol [ug_m3]']
+    log_trans_cols = conf['log_trans_cols']
         
     # Load the data
-    if os.path.isfile(join(output_path, 'validation_data', f'{species}_in_train.parquet')): 
-        in_train = pd.read_parquet(join(output_path, 'validation_data', f'{species}_in_train.parquet'))
-        out_train = pd.read_parquet(join(output_path, 'validation_data', f'{species}_out_train.parquet'))
-        in_val = pd.read_parquet(join(output_path, 'validation_data', f'{species}_in_val.parquet'))
-    else: 
-        # Load GECKO experiment data, split into ML inputs and outputs and persistence outputs
-        input_data, output_data = combine_data(
-            dir_path, 
-            summary_file, 
-            aggregate_bins, 
-            bin_prefix, 
-            input_vars, 
-            output_vars, 
-            species
-        )
 
-        # Split into training, validation, testing subsets
-        in_train, out_train, in_val, out_val, in_test, out_test = split_data(
-            input_data=input_data, 
-            output_data=output_data, 
-            train_start=conf['train_start_exp'],
-            train_end=conf['train_end_exp'],
-            val_start=conf['val_start_exp'],
-            val_end=conf['val_end_exp'],
-            test_start=conf['test_start_exp'],
-            test_end=conf['test_end_exp']
-        )
+    data = load_data(path=dir_path,
+                     aggregate_bins=aggregate_bins,
+                     species=species,
+                     input_columns=input_cols,
+                     output_columns=output_cols,
+                     log_trans_cols=log_trans_cols)
+    in_train = data["train_in"]
+    out_train = data["train_out"]
+    in_val = data["val_out"]
 
     num_timesteps = in_train['Time [s]'].nunique()
 
