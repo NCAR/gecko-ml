@@ -36,26 +36,18 @@ def test_boxmodel():
     output_vars = config['output_vars']
     output_path = config['output_path']
     scaler_type = config['scaler_type']
-    seq_length = config['seq_length']
-    train_start_exp = config['train_start_exp']
-    train_end_exp = config['train_end_exp']
-    val_start_exp = config['val_start_exp']
-    val_end_exp = config['val_end_exp']
-    test_start_exp = config['test_start_exp']
-    test_end_exp = config['test_end_exp']
-    box_val_exps = config['box_val_exps']
 
-    assert len(input_vars) == 37
-    assert len(output_vars) == 31
+    assert len(input_vars) == 35
+    assert len(output_vars) == 28
     
     # Unit Test
 
-    in_train = pd.read_csv("test_data/in_train_test.csv")
-    out_train = pd.read_csv("test_data/out_train_test.csv")
+    in_train = pd.read_csv("./test_data/in_train_test.csv").set_index('id')
+    out_train = pd.read_csv("./test_data/out_train_test.csv")
 
     # Rescale training and validation / testing data
     x_scaler = MinMaxScaler()
-    scaled_in_train = x_scaler.fit_transform(in_train.drop(['Time [s]', 'id'], axis=1))
+    scaled_in_train = x_scaler.fit_transform(in_train.drop(['Time [s]'], axis=1))
     
     # Load transform scaler
     y_scaler = MinMaxScaler()
@@ -85,27 +77,19 @@ def test_boxmodel():
     assert os.path.exists(test_path)
     
     mod = GeckoBoxEmulator(
-        neural_net_path = test_path, 
-        output_scaler=y_scaler,
+        neural_net_path=test_path,
         input_cols=input_vars, 
         output_cols=output_vars
     )
-
-    
-    starting_conds = scaled_in_train[0].reshape((1, scaled_in_train[0].shape[0]))
-    temps = in_train['temperature (K)']
+    scaled_train_copy = in_train.drop(['Time [s]'], axis=1).copy()
+    scaled_train_copy.loc[:] = x_scaler.fit_transform(scaled_train_copy)
     time_series = in_train['Time [s]']
     exp = 'Exp0'
-    results = mod.predict(
-        starting_conds,
-        num_timesteps,
-        temps,
-        time_series,
-        exp
-    )
+    results = mod.run_box_simulation(raw_val_output=in_train,
+                                     transformed_val_input=scaled_train_copy,
+                                     exps=exp)
     
     assert len(time_series) == 1439
-    assert starting_conds.shape == (1, 35)
     assert results.shape[0] == 1439
     assert isinstance(results, pd.DataFrame)
 
