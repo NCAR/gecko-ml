@@ -4,7 +4,6 @@ from tensorflow.keras.models import load_model
 from tensorflow.python.framework.ops import disable_eager_execution
 import random
 import torch
-from sklearn.metrics import mean_squared_error, mean_absolute_error
 
 from .data import inv_transform_preds
 from .metrics import ensembled_metrics
@@ -76,18 +75,16 @@ class GeckoBoxEmulator(object):
                                 columns=self.output_cols, index=idx)
         return preds_df
 
-    
-def rnn_box_train_one_epoch(model, 
-                            optimizer, 
-                            loss_fn, 
+
+def rnn_box_train_one_epoch(model,
+                            optimizer,
+                            loss_fn,
                             batch_size,
-                            in_array, 
+                            in_array,
                             out_col_idx,
-                            hidden_weight = 1.0, 
-                            loss_weights = [1.0, 1.0, 1.0],
-                            grad_clip = 1.0):
-    
-    
+                            hidden_weight=1.0,
+                            loss_weights=[1.0, 1.0, 1.0],
+                            grad_clip=1.0):
     """ Train an RNN model for one epoch given training data as input
     Args:
         model (torch.nn.Module)
@@ -104,13 +101,13 @@ def rnn_box_train_one_epoch(model,
         model (torch.nn.Module)
         optimizer (torch.nn.Module)
     """
-    
+
     # Set the model to training mode
     model.train()
-    
+
     # Grab the device from the model
     device = model._device()
-    
+
     # Move the weights to the device
     loss_weights = torch.FloatTensor(loss_weights).to(device)
 
@@ -138,7 +135,7 @@ def rnn_box_train_one_epoch(model,
         # get loss for the predicted output
         loss = loss_fn(_in_array[:, 1, out_col_idx], pred)
         loss = (loss_weights * loss).mean()
-        
+
         # get gradients w.r.t to parameters
         loss.backward()
         train_epoch_loss.append(loss.item())
@@ -147,25 +144,25 @@ def rnn_box_train_one_epoch(model,
         torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
         optimizer.step()
 
-        for i in range(1, num_timesteps-1):
+        for i in range(1, num_timesteps - 1):
             # Use the last prediction to get the next prediction
             optimizer.zero_grad()
 
             # update the next input to the model
             new_input = _in_array[:, i, :]
             new_input[:, out_col_idx] = pred.detach()
-            
+
             # predict hidden state
             h0_pred = model.init_hidden(new_input.cpu())
             # compute loss for the last hidden prediction
             hidden_loss = loss_fn(h0.detach(), h0_pred).mean()
             # predict next state with the GRU
             pred, h0 = model(new_input, h0.detach())
-                
+
             # get loss for the predicted output
-            loss = loss_fn(_in_array[:, i+1, out_col_idx], pred)
+            loss = loss_fn(_in_array[:, i + 1, out_col_idx], pred)
             loss = (loss_weights * loss).mean()
-        
+
             # combine losses
             loss += hidden_weight * hidden_loss
 
@@ -178,23 +175,21 @@ def rnn_box_train_one_epoch(model,
             optimizer.step()
 
     train_loss = np.mean(train_epoch_loss)
-    
+
     return train_loss, model, optimizer
 
 
-
-def rnn_box_test(model, 
+def rnn_box_test(model,
                  loss_fn,
-                 in_array, 
+                 in_array,
                  out_array,
                  y_scaler,
-                 output_cols, 
+                 output_cols,
                  out_col_idx,
                  log_trans_cols,
                  tendency_cols,
-                 stable_thresh = 10, 
-                 start_times = [0]):
-    
+                 stable_thresh=10,
+                 start_times=[0]):
     """ Run an RNN model in inference mode data as input
     Args:
         model (torch.nn.Module)
@@ -214,27 +209,27 @@ def rnn_box_test(model,
         preds (pd.DataFrame)
         truth (pd.DataFrame)
     """
-    
+
     # Put the model into eval model
     model.eval()
-    
+
     # Grab the device from the model
     device = model._device()
-    
+
     # How many total timesteps in the data
     num_timesteps = in_array.shape[1]
-    
+
     all_preds, all_truths, total_loss = [], [], []
     for start_time in start_times:
-        
+
         val_loss = []
         _in_array = torch.from_numpy(in_array).to(device).float()
-        
+
         with torch.no_grad():
-            
+
             # set up array for saving predicted results
-            pred_array = np.empty((in_array.shape[0], num_timesteps-start_time, len(out_col_idx)))
-            
+            pred_array = np.empty((in_array.shape[0], num_timesteps - start_time, len(out_col_idx)))
+
             # use initial condition @ t = start_time and get the first prediction
             h0 = model.init_hidden(_in_array[:, start_time, :])
             pred, h0 = model(_in_array[:, start_time, :], h0)
@@ -243,13 +238,13 @@ def rnn_box_test(model,
             val_loss.append(loss)
 
             # use the first prediction to get the next, and so on for num_timesteps
-            for k, i in enumerate(range(start_time + 1, num_timesteps)): 
+            for k, i in enumerate(range(start_time + 1, num_timesteps)):
                 new_input = _in_array[:, i, :]
                 new_input[:, out_col_idx] = pred
                 pred, h0 = model(new_input, h0)
-                pred_array[:, k+1, :] = pred.cpu().numpy()
-                if i < (num_timesteps-1):
-                    loss = loss_fn(_in_array[:, i+1, out_col_idx], pred).item()
+                pred_array[:, k + 1, :] = pred.cpu().numpy()
+                if i < (num_timesteps - 1):
+                    loss = loss_fn(_in_array[:, i + 1, out_col_idx], pred).item()
                     val_loss.append(loss)
 
         # put results into pandas df, first select indices relevant to the start time
@@ -257,13 +252,13 @@ def rnn_box_test(model,
         start_time_units = sorted(list(set([x[0] for x in idx])))[start_time]
         start_time_condition = [x[0] >= start_time_units for x in idx]
         idx = out_array[start_time_condition].index
-                
+
         raw_box_preds = pd.DataFrame(
             data=pred_array.reshape(-1, len(output_cols)),
-            columns=output_cols, 
+            columns=output_cols,
             index=idx
         )
-        
+
         # inverse transform 
         truth, preds = inv_transform_preds(
             raw_preds=raw_box_preds,
@@ -271,14 +266,14 @@ def rnn_box_test(model,
             y_scaler=y_scaler,
             log_trans_cols=log_trans_cols,
             tendency_cols=tendency_cols)
-                
+
         # Accumulate the results for each box simulation for different starting times
         all_preds.append(preds)
         all_truths.append(truth)
-        
+
         # Accumulate the step losses across different starting times
         total_loss += val_loss
-        
+
     all_preds = pd.concat(all_preds)
     all_truths = pd.concat(all_truths)
     metrics = ensembled_metrics(y_true=all_truths,
