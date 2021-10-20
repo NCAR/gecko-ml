@@ -113,6 +113,20 @@ def log_transform(dataframe, cols_to_transform):
     return dataframe
 
 
+def log_transform_safely(dataFrame, cols_to_transform, min_value):
+   """
+       Performs log transform but sets any value that is negative infinty to a set min_value.
+   """
+   transformed = log_transform(dataFrame, cols_to_transform)
+   negatives = transformed[cols_to_transform] == np.NINF
+   try:
+       for column in negatives.columns:
+           transformed.loc[negatives[column], column] = min_value
+   except:
+       transformed.loc[negatives, cols_to_transform] = min_value
+   return transformed
+
+
 def inverse_log_transform(dataframe, cols_to_transform):
     """
     Perform inverse log 10 transformation of specified columns
