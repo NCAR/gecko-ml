@@ -1,4 +1,5 @@
 import sys
+
 sys.path.append('../')
 import argparse
 import pandas as pd
@@ -19,7 +20,7 @@ def main():
                         help="Threads per dask worker (multiprocessing)")
     args = parser.parse_args()
     with open(args.config) as config_file:
-        config = yaml.load(config_file)
+        config = yaml.safe_load(config_file)
 
     species = config['species']
     aggregate_bins = config['aggregate_bins']
@@ -50,14 +51,14 @@ def main():
                                            input_cols=input_vars,
                                            output_cols=output_vars)
                     raw_box_preds = mod.run_box_simulation(raw_val_output=data['val_out'],
-                                                             transformed_val_input=transformed_data['val_in'],
-                                                             exps=exps)
+                                                           transformed_val_input=transformed_data['val_in'],
+                                                           exps=exps)
 
                     truth, box_preds = inv_transform_preds(raw_preds=raw_box_preds,
-                                                            truth=data["val_out"],
-                                                            y_scaler=y_scaler,
-                                                            log_trans_cols=log_trans_cols,
-                                                            tendency_cols=tendency_cols)
+                                                           truth=data["val_out"],
+                                                           y_scaler=y_scaler,
+                                                           log_trans_cols=log_trans_cols,
+                                                           tendency_cols=tendency_cols)
                     if not aggregate_bins:
                         truth, box_preds = sum_bins(truth, box_preds, bin_prefix)
 

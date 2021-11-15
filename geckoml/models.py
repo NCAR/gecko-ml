@@ -1,19 +1,18 @@
-from tensorflow.keras.layers import (Input, Dense, Dropout, GaussianNoise, 
-                                     Activation, Concatenate, BatchNormalization, 
-                                     LSTM, Conv1D, AveragePooling1D, MaxPooling1D, 
-                                     LeakyReLU)
-from tensorflow.keras.models import Model
-from tensorflow.keras.regularizers import l1, l2, l1_l2
-from tensorflow.keras.optimizers import Adam, SGD
-import tensorflow.keras.backend as K
-import xarray as xr
-import numpy as np
 import logging
 import os
-import torch.nn.init as init
-import torch.nn as nn
-import torch
 
+import numpy as np
+import tensorflow.keras.backend as K
+import torch
+import torch.nn as nn
+import torch.nn.init as init
+import xarray as xr
+from keras_self_attention import SeqSelfAttention
+from tensorflow.keras.layers import (Input, Dense, Dropout, GaussianNoise,
+                                     LSTM, Conv1D, LeakyReLU)
+from tensorflow.keras.models import Model
+from tensorflow.keras.optimizers import Adam, SGD
+from tensorflow.keras.regularizers import l1, l2, l1_l2
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +45,7 @@ class DenseNeuralNetwork(object):
         verbose: Level of detail to provide during training (0 = None, 1 = Minimal, 2 = All)
         classifier: (boolean) If training on classes
     """
+
     def __init__(self, hidden_layers=1, hidden_neurons=4, activation="relu", output_layers=1,
                  output_activation="linear", optimizer="adam", loss="mse", loss_weights=1, use_noise=False,
                  noise_sd=0.01, lr=0.001, use_dropout=False, dropout_alpha=0.1, batch_size=128, epochs=2,
@@ -117,7 +117,7 @@ class DenseNeuralNetwork(object):
         nn_model_out = {}
         for i in range(len(outputs)):
             nn_model_out[i] = Dense(outputs[i],
-                             activation=self.output_activation, name=f"dense_out_{i:02d}")(nn_model)
+                                    activation=self.output_activation, name=f"dense_out_{i:02d}")(nn_model)
         output_layers = [x for x in nn_model_out.values()]
         self.model = Model(nn_input, output_layers)
         if self.optimizer == "adam":
@@ -130,7 +130,6 @@ class DenseNeuralNetwork(object):
             self.model.compile(optimizer=self.optimizer_obj, loss=self.x_sigmoid, loss_weights=self.loss_weights)
         else:
             self.model.compile(optimizer=self.optimizer_obj, loss=self.loss, loss_weights=self.loss_weights)
-
 
     def fit(self, x, y):
         inputs = x.shape[1]
@@ -230,6 +229,7 @@ class LongShortTermMemoryNetwork(object):
         decay: Level of decay to apply to learning rate
         verbose: Level of detail to provide during training (0 = None, 1 = Minimal, 2 = All)
     """
+
     def __init__(self, hidden_layers=1, hidden_neurons=50, activation="relu", output_layers=1,
                  output_activation="linear", optimizer="adam", loss="mse", loss_weights=1,
                  use_noise=False, noise_sd=0.01, lr=0.001, use_dropout=False, dropout_alpha=0.1, batch_size=128,
@@ -289,7 +289,7 @@ class LongShortTermMemoryNetwork(object):
         nn_model_out = {}
         for i in range(len(outputs)):
             nn_model_out[i] = LSTM(outputs[i],
-                             activation=self.output_activation, name=f"lstm_out_{i:02d}")(nn_model)
+                                   activation=self.output_activation, name=f"lstm_out_{i:02d}")(nn_model)
         output_layers = [x for x in nn_model_out.values()]
         self.model = Model(nn_input, output_layers)
         if self.optimizer == "adam":
@@ -333,9 +333,8 @@ class LongShortTermMemoryNetwork(object):
                 num_dense += 1
         nn_ds["layer_names"] = (("num_layers",), np.array(layer_names))
         nn_ds.attrs["num_layers"] = num_dense
-        nn_ds.to_netcdf(filename, encoding={'layer_names':{'dtype': 'S1'}})
+        nn_ds.to_netcdf(filename, encoding={'layer_names': {'dtype': 'S1'}})
         return
-
 
     def predict(self, x):
         if self.classifier:
@@ -346,9 +345,7 @@ class LongShortTermMemoryNetwork(object):
         return y_out
 
 
-
 class GRUNet(torch.nn.Module):
-    
     """
     A GRU Neural Network Model that can support arbitrary numbers of hidden layers.
 
@@ -371,29 +368,29 @@ class GRUNet(torch.nn.Module):
         hidden_model: torch.nn.Module
         - Torch Linear layer for the initial hidden state
     """
-    
-    def __init__(self, 
+
+    def __init__(self,
                  hidden_dim: int,
-                 n_layers: int, 
-                 drop_prob: float = 0.2): 
-        
+                 n_layers: int,
+                 drop_prob: float = 0.2):
+
         super(GRUNet, self).__init__()
-        
+
         self.hidden_dim = hidden_dim
         self.n_layers = n_layers
         self.dr = drop_prob
         self.device = None
-        
+
         self.gru = None
         self.fc = None
         self.relu = None
         self.hidden_model = None
-        
-    def build(self, 
-              input_dim: int, 
+
+    def build(self,
+              input_dim: int,
               output_dim: int,
               weights_path: str = None) -> None:
-        
+
         """
             Build the GRU network 
         
@@ -402,18 +399,18 @@ class GRUNet(torch.nn.Module):
             output_dim: int
             - The number of prediction targets
         """
-        
+
         self.gru = torch.nn.GRU(input_dim, self.hidden_dim, self.n_layers, batch_first=True, dropout=self.dr)
         self.fc = torch.nn.Linear(self.hidden_dim, output_dim)
         self.relu = torch.nn.LeakyReLU()
         self.hidden_model = torch.nn.Linear(input_dim, self.hidden_dim)
-        
+
         total_params = sum(p.numel() for p in self.parameters())
         trainable_params = sum(p.numel() for p in self.parameters() if p.requires_grad)
         logger.info(
             f"The model contains {total_params} total parameters, {trainable_params} are trainable"
         )
-                
+
         if isinstance(weights_path, str):
             if os.path.isfile(weights_path):
                 self.load_weights(weights_path)
@@ -422,6 +419,7 @@ class GRUNet(torch.nn.Module):
         else:
             ## Weights initialization
             logger.info(f"Initializing the weights for the model")
+
             def _weights_init(m):
                 if isinstance(m, nn.Conv2d or nn.Linear):
                     init.xavier_normal_(m.weight)
@@ -429,19 +427,19 @@ class GRUNet(torch.nn.Module):
                 elif isinstance(m, nn.GRU or nn.LSTM):
                     for name, param in m.named_parameters():
                         if 'bias' in name:
-                             nn.init.constant_(param, 0.0)
+                            nn.init.constant_(param, 0.0)
                         elif 'weight_ih' in name:
-                             nn.init.kaiming_normal_(param)
+                            nn.init.kaiming_normal_(param)
                         elif 'weight_hh' in name:
-                             nn.init.orthogonal_(param)
+                            nn.init.orthogonal_(param)
                 elif isinstance(m, nn.BatchNorm2d or nn.BatchNorm1d):
                     m.weight.data.fill_(1)
                     m.bias.data.zero_()
+
             self.apply(_weights_init)
-                
-        
+
     def load_weights(self, weights_path: str) -> None:
-        
+
         """
             Loads model weights given a valid weights path
             
@@ -449,7 +447,7 @@ class GRUNet(torch.nn.Module):
             - File path to the weights file (.pt)
         """
         logger.info(f"Loading model weights from {weights_path}")
-        
+
         try:
             checkpoint = torch.load(
                 weights_path,
@@ -460,12 +458,11 @@ class GRUNet(torch.nn.Module):
             logger.info(
                 f"Failed to load model weights at {weights_path} due to error {str(E)}"
             )
-        
-        
-    def forward(self, 
-                x: torch.Tensor, 
+
+    def forward(self,
+                x: torch.Tensor,
                 h: torch.Tensor) -> (torch.Tensor, torch.Tensor):
-        
+
         """
             Pass the inputs through the model and return the prediction
         
@@ -481,15 +478,15 @@ class GRUNet(torch.nn.Module):
             h: torch.Tensor
             - The hidden state returned by the GRU at time t + 1
         """
-        
+
         x = x.unsqueeze(1)
         out, h = self.gru(x, h)
-        out = self.fc(self.relu(out[:,-1]))
+        out = self.fc(self.relu(out[:, -1]))
         return out, h
-    
-    def init_hidden(self, 
+
+    def init_hidden(self,
                     x: torch.Tensor) -> torch.Tensor:
-        
+
         """
             Predict a hidden state for the initial input to the model at t = 0
         
@@ -500,14 +497,14 @@ class GRUNet(torch.nn.Module):
             Returns: torch.Tensor
             - A hidden state corresponding to the initial condition
         """
-        
+
         device = self._device() if self.device is None else self.device
         hidden = self.hidden_model(x.to(device)).unsqueeze(0)
         hidden = torch.cat([hidden.clone() for x in range(self.n_layers)]) if self.n_layers > 1 else hidden
         return hidden
-    
+
     def _device(self) -> str:
-        
+
         """
             Set and return the device that the model was placed onto.
         
@@ -516,14 +513,14 @@ class GRUNet(torch.nn.Module):
             - Device identifier
         
         """
-        
+
         self.device = next(self.parameters()).device
         return self.device
-    
-    def predict(self, 
-                x: np.array, 
+
+    def predict(self,
+                x: np.array,
                 h: np.array) -> (np.array, np.array):
-        
+
         """
             Predict method for running the model in box mode.
             Handles converting numpy tensor input to torch
@@ -542,7 +539,7 @@ class GRUNet(torch.nn.Module):
             - The hidden state to the GRU at time t + 1
         
         """
-        
+
         device = self._device() if self.device is None else self.device
         with torch.no_grad():
             x = torch.from_numpy(x).float().to(device)

@@ -1,7 +1,9 @@
 import sys
+
 sys.path.append('../')
 from geckoml.models import DenseNeuralNetwork
-from geckoml.data import partition_y_output, inv_transform_preds, save_metrics, save_scaler_csv, load_data, transform_data
+from geckoml.data import partition_y_output, inv_transform_preds, save_metrics, save_scaler_csv, load_data, \
+    transform_data
 from geckoml.metrics import ensembled_metrics
 import time
 import joblib
@@ -13,14 +15,12 @@ from os.path import join
 
 
 def main():
-    
     start = time.time()
-    print('BEG')
     parser = argparse.ArgumentParser()
     parser.add_argument("-c", "--config", default="apin_O3.yml", help="Path to config file")
     args = parser.parse_args()
     with open(args.config) as config_file:
-        config = yaml.load(config_file)
+        config = yaml.safe_load(config_file)
 
     species = config['species']
     data_path = config['dir_path']
@@ -52,14 +52,13 @@ def main():
                                        aggregate_bins)
                 MLP_metrics[model_name] = {}
                 for member in range(ensemble_members):
-
                     mod = DenseNeuralNetwork(**model_config)
                     mod.fit(transformed_data['train_in'], y)
                     preds = pd.DataFrame(mod.predict(transformed_data['val_in']),
                                          columns=transformed_data['val_out'].columns,
                                          index=transformed_data['val_out'].index)
                     truth, single_ts_preds = inv_transform_preds(preds, transformed_data["val_out"], y_scaler,
-                                                             log_trans_cols, tendency_cols)
+                                                                 log_trans_cols, tendency_cols)
                     MLP_metrics[model_name][f'_{member}'] = ensembled_metrics(truth,
                                                                               single_ts_preds,
                                                                               member,

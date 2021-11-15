@@ -3,10 +3,11 @@ import pandas as pd
 from os.path import join
 import s3fs
 import joblib
-from sklearn.preprocessing import StandardScaler, RobustScaler, MaxAbsScaler, MinMaxScaler
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
 
 scalers = {"MinMaxScaler": MinMaxScaler,
            "StandardScaler": StandardScaler}
+
 
 def load_data(path, aggregate_bins, species, input_columns, output_columns, log_trans_cols):
     """
@@ -27,7 +28,7 @@ def load_data(path, aggregate_bins, species, input_columns, output_columns, log_
     else:
         data_type = 'binned'
     data = {}
-    for partition in ['train_in', 'train_out', 'val_in', 'val_out']:#, 'test_in', 'test_out']:
+    for partition in ['train_in', 'train_out', 'val_in', 'val_out']:  # , 'test_in', 'test_out']:
         if 'AWS:' in path:
             aws_path = path.split('AWS:')[-1]
             data[partition] = pd.read_parquet(fs.open(join(aws_path, f'{species}_{partition}_{data_type}.parquet'))) \
@@ -43,7 +44,8 @@ def load_data(path, aggregate_bins, species, input_columns, output_columns, log_
         gas_log = any(["Gas" in x for x in log_trans_cols])
         aero_log = any(["Aerosol" in x for x in log_trans_cols])
         if gas_log or aero_log:
-            data[partition] = data[partition].groupby('id').apply(lambda x: x.iloc[1:, :]).reset_index(level=2, drop=True)
+            data[partition] = data[partition].groupby('id').apply(lambda x: x.iloc[1:, :]).reset_index(level=2,
+                                                                                                       drop=True)
 
     return data
 
@@ -60,9 +62,8 @@ def transform_data(data, out_path, species, tendency_cols, log_trans_cols, scale
         numpy array of transformed and scaled data.
     """
     transformed_data = {}
-    partitions = ['train_in', 'train_out', 'val_in', 'val_out']#, 'test_in', 'test_out']
+    partitions = ['train_in', 'train_out', 'val_in', 'val_out']  # , 'test_in', 'test_out']
     for p in partitions:
-
         transformed_data[p] = get_tendencies(data[p], tendency_cols)
         transformed_data[p] = log_transform(transformed_data[p], log_trans_cols)
 
@@ -198,6 +199,9 @@ def save_scaler_csv(scaler_obj, input_columns, output_path, species, scaler_type
     elif scaler_type == 'MinMaxScaler':
         input_scaler_df = pd.DataFrame({"min": scaler_obj.min_, "scale": scaler_obj.scale_},
                                        index=input_columns)
+    else:
+        input_scaler_df = pd.DataFrame({"mean": [np.nan] * len(input_columns), "scale": [np.nan] * len(input_columns)},
+                                       index=input_columns)
     input_scaler_df.to_csv(join(output_path, f'models/{species}_scale_values.csv'), index_label="input")
     return
 
@@ -248,4 +252,3 @@ def save_metrics(metrics, output_path, model_name, members, model_type):
     ensemble_metrics.to_csv(join(output_path, 'metrics', f'{model_name}_mean_{model_type}_metrics.csv'))
 
     return
-
