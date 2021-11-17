@@ -3,6 +3,7 @@ name: gecko
 channels:
   - conda-forge
 dependencies:
+  - python=3.8
   - optuna
   - numpy
   - seaborn

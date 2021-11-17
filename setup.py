@@ -4,7 +4,7 @@ import yaml
 env_file = "environment.yml"
 with open(env_file) as env:
     env_dict = yaml.load(env, Loader=yaml.Loader)
-requirements = env_dict["dependencies"][:-1]
+requirements = env_dict["dependencies"][1:-1]
 requirements.extend(env_dict["dependencies"][-1]["pip"][:-1])
 print(requirements)
 setup(name="gecko-ml",
