@@ -3,8 +3,8 @@ name: gecko
 channels:
   - conda-forge
 dependencies:
-  - optuna
   - python=3.8
+  - optuna
   - numpy
   - seaborn
   - scipy
@@ -34,5 +34,4 @@ dependencies:
     - shap
     - pyDOE
     - keras-self-attention
-    - git+https://github.com/NCAR/echo-opt.git
     - .
