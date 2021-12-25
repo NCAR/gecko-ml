@@ -36,7 +36,7 @@ jobs:
         run: |
           conda activate gecko
           python applications/run_gecko_emulators.py -c config/ci_config.yml
-        - name: Run the gecko train script for the GRU model
+      - name: Run the gecko train script for the GRU model
         run: |
           conda activate gecko
           python applications/train_gecko_rnn_emulators.py -c config/ci_config_rnn.yml
