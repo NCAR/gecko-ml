@@ -1,6 +1,7 @@
-from geckoml.models import DenseNeuralNetwork
+from geckoml.models import DenseNeuralNetwork, GRUNet
 import numpy as np
 import pandas as pd
+import torch
 
 np.random.seed(9)
 
@@ -13,6 +14,22 @@ def test_denseneuralnetwork():
     p = nn.predict(x)
     p2 = nn.predict(x)
     assert np.array_equal(p, p2)
+    assert not np.isnan(y).any()
+    assert y.shape[-1] == 3
+
+
+def test_gruneuralnetwork():
+    nn = GRUNet(1215, 1, 0.0)
+    nn.build(9, 3)
+    nn.eval()
+    x = torch.from_numpy(np.random.random(size=(2, 9)).astype(np.float32))
+    y = torch.from_numpy(np.random.random(size=(2, 3)).astype(np.float32))
+    with torch.no_grad():
+        h = nn.init_hidden(x)
+        p, h1 = nn(x, h)
+        p2, h2 = nn(x, h)
+    assert np.array_equal(p.numpy(), p2.numpy())
+    assert np.array_equal(h1.numpy(), h2.numpy())
     assert not np.isnan(y).any()
     assert y.shape[-1] == 3
 

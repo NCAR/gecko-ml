@@ -15,4 +15,4 @@ setup(name="gecko-ml",
       license="MIT",
       url="https://github.com/NCAR/gecko-ml",
       install_requires=requirements,
-      packages=["geckoml", "geckoml/torch"])
+      packages=["geckoml"])
