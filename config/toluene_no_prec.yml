@@ -1,7 +1,7 @@
-species: 'apin_O3'
-dir_path: '/glade/p/cisl/aiml/gecko/partition_data/'
-# dir_path: 'AWS:ncar-aiml-data-commons/gecko/' #use prefix 'AWS:' if path is AWS bucket
-output_path: '/home/cbecker/gecko_apin_agg_runs'
+species: 'tolueneX10'
+dir_path: 'AWS:ncar-aiml-data-commons/gecko/' #use prefix 'AWS:' if path is AWS bucket
+output_path: '/home/cbecker/gecko_tolueneX10_agg_runs'
+summary_file: ''
 aggregate_bins: True
 ensemble_members: 1 # set to 1 for a single run
 scaler_type: "StandardScaler"
@@ -27,7 +27,7 @@ model_configurations:
   MLP:
     DNN_1:
       hidden_layers: 1
-      hidden_neurons: 500
+      hidden_neurons: 128
       activation: "leaky"
       output_layers: 1
       output_activation: "linear"
@@ -38,18 +38,16 @@ model_configurations:
       batch_size: 2048
       use_noise: False
       noise_sd: 0.01
-      epochs: 100
+      epochs: 10
       use_dropout: False
       dropout_alpha: 0.1
       kernel_reg: 'l1_l2'
       l1_weight: 0.00001
-      l2_weight: 0.0000001
+      l2_weight: 0.0001
       sgd_momentum: 0.9
       adam_beta_1: 0.9
       adam_beta_2: 0.999
       epsilon: 0.0000001
-      decay: 0
+      decay: 0.00001
       verbose:  1
       classifier: False
-
-

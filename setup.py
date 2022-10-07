@@ -1,4 +1,6 @@
 from setuptools import setup
+import yaml
+
 
 setup(name="gecko-ml",
       version="0.1",
@@ -7,4 +9,5 @@ setup(name="gecko-ml",
       author_email="dgagne@ucar.edu",
       license="MIT",
       url="https://github.com/NCAR/gecko-ml",
-      packages=["geckoml", "geckoml/torch"])
+      install_requires=requirements,
+      packages=["geckoml"])

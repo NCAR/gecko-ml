@@ -1,0 +1,44 @@
+species: 'toluene'
+# dir_path: '/glade/p/cisl/aiml/gecko/partition_data/'
+dir_path: 'AWS:ncar-aiml-data-commons/gecko/' #use prefix 'AWS:' if path is AWS bucket
+output_path: './test_output/'
+aggregate_bins: True
+ensemble_members: 2 # set to 1 for a single run
+scaler_type: "StandardScaler"
+bin_prefix: ['Gas [ug/m3]', 'Aerosol [ug_m3]']
+box_val_exps: 'all'
+random_seed: 8886
+input_vars: [
+    'Precursor [ug/m3]',
+    'Gas [ug/m3]',
+    'Aerosol [ug_m3]',
+    'temperature (K)',
+    'solar zenith angle (degree)',
+    'pre-existing aerosols (ug/m3)',
+    'o3 (ppb)',
+    'nox (ppb)',
+    'oh (10^6 molec/cm3)']
+output_vars: [
+    'Gas [ug/m3]',
+    'Aerosol [ug_m3]']
+log_trans_cols: ['Precursor [ug/m3]']
+tendency_cols: []
+model_configurations:
+  RNN:
+    GRU_1:
+      hidden_size: 10
+      n_layers: 1
+      lr: 6.926089154379343e-05
+      l2_weight: 2.2689376863511592e-08
+      rnn_dropout: 0.12194411931938468
+      hidden_weight: 0.16056491434685974
+      batch_size: 16
+      epochs: 5
+      verbose: True
+      lr_patience: 3
+      stopping_patience: 7
+      member: 0
+      precursor_weight: 0.8190070654012078
+      gas_weight: 0.15068963483373593
+      aero_weight: 0.4211258445629953
+      validation_starting_times: [0, 10, 50, 100, 200, 500, 1000]

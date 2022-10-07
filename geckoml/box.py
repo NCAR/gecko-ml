@@ -1,297 +1,287 @@
 import pandas as pd
 import numpy as np
-import gc
-import tensorflow as tf
 from tensorflow.keras.models import load_model
 from tensorflow.python.framework.ops import disable_eager_execution
-from .data import inverse_log_transform
+import random
+import torch
+
+from .data import inv_transform_preds
+from .metrics import ensembled_metrics
 
 disable_eager_execution()
 
 
 class GeckoBoxEmulator(object):
     """
-    Forward running box emulator for the GECKO-A atmospheric chemistry model. Uses first timestep of an experiment
-    as the initial conditions for first prediction of neural network - uses that prediction as the new input for
-    another prediction, and so on, looping through the length of an experiment.
-
-    Attributes:
-          neural_net_path (str): Path to saved neural network.
-          output_scaler (str): Y Scaler object used on data to train the neural network.
-          input_cols (list): Columns used as input into model
-          output_cols (list): Columns used as output to model
-          seed (int): Random seed
+    Model class to run Box model through time.
+    Args:
+        neural_net_path: Path to saved model
+        input_cols: Feature names for input to model
+        output_cols: Feature names for output of model
+        model_object: Model object to be used in hyperparamter optimization. Deafults to None.
+        hyper_opt: Whether or not this is being used in a hyperparameter tuning setting. Defaults to False.
     """
 
-    def __init__(self, neural_net_path, output_scaler, input_cols, output_cols, seed=8176):
+    def __init__(self, neural_net_path, input_cols, output_cols, model_object=None, hyper_opt=False):
 
         self.neural_net_path = neural_net_path
-        self.output_scaler = output_scaler
         self.input_cols = input_cols
         self.output_cols = output_cols
-        self.seed = seed
+        if hyper_opt:
+            self.mod = model_object
+        else:
+            self.mod = load_model(self.neural_net_path)
 
         return
 
-    def run_ensemble(self, client, data, num_timesteps, exps='all'):
+    def run_box_simulation(self, raw_val_output, transformed_val_input, exps='all'):
         """
         Run an ensemble of GECKO-A experiment emulations distributed over a cluster using dask distributed.
         Args:
-            client: Dask distributed TCP client
-            data (numpy array): Scaled input Validation/testing dataframe, split by experiment.
-            num_timesteps (int): Number of timesteps to run each emulation forward.
-            exps (list of integers or 'all'): Number of experiments to run. Defaults to 'all' within data provided. If (int),
-                    choose experiments randomly from those available.
+            raw_val_output( pd.DataFrame): Raw validation output dataframe
+            transformed_val_input (pd.DataFrame): Transformed/scaled validation dataframe, split by experiment.
+            exps (list of experiments or 'all'):
         Returns:
             results_df (DataFrame): A concatenated pandas DataFrame of emulation results.
         """
-        np.random.seed(self.seed)
-
-        if exps == 'all':
-            exps = data['id'].unique()
+        truth = raw_val_output.copy()
+        if exps != 'all':
+            data_sub = transformed_val_input.loc[transformed_val_input.index.isin(exps, level='id')]
+            truth = truth.loc[truth.index.isin(exps, level='id')]
         else:
-            exps = ['Exp' + str(i) for i in exps]
+            data_sub = transformed_val_input.copy(deep=True)
 
-        starting_conds, temps, initial_out_values = [], [], []
-        time_series = data[data['id'] == exps[0]]['Time [s]']
+        n_exps = len(data_sub.index.unique(level='id'))
+        n_timesteps = len(data_sub.index.unique(level='Time [s]'))
+        n_features = len(self.input_cols)
+        out_col_idx = data_sub.columns.get_indexer(self.output_cols)
+        batched_array = data_sub.values.reshape(n_exps, n_timesteps, n_features)
+        pred_array = np.empty((n_exps, n_timesteps, len(self.output_cols)))
 
-        for x in exps:
-            data_sub = data[data['id'] == x].iloc[:, 1:-1].copy()
-            data_sub.columns = self.input_cols[1:-1]
-            temperature_ts = data_sub['temperature (K)'][1:].values
-            sc = data_sub.iloc[0:1, :].values
-            starting_conds.append(sc)
-            temps.append(temperature_ts)
+        pred = None
+        for time_step in range(n_timesteps):
+            if time_step == 0:
+                new_input = batched_array[:, time_step, :]
+            elif time_step > 0:
+                new_input = batched_array[:, time_step, :]
+                new_input[:, out_col_idx] = pred
 
-        futures = client.map(self.predict, starting_conds, [num_timesteps]*len(exps), temps,
-                             [time_series]*len(exps), exps)
-        results = client.gather(futures)
-        results_df = pd.concat(results)
+            pred = np.block(self.mod.predict(new_input))
+            pred_array[:, time_step, :] = pred
 
-        return results_df
+        idx = raw_val_output.index
 
-    def predict(self, starting_conds, num_timesteps, temps, time_series, exp):
-        """ Run emulation of single experiment given initial conditions.
-        Args:
-            starting_conds (DataFrame): DataFrame of initial conditions.
-            num_timesteps (int): Length of timesteps to run emulation.
-            temps (Pandas Series): Timeseries of diurnally varying temperatures for respective experiment.
-            time_series (Pandas Series): Pandas 'Time' column from experiment data.
-            exp: Experiment number
-
-        Returns:
-            results (DataFrame): Pandas dataframe of emulated values with time stamps.
-        """
-
-        mod = load_model(self.neural_net_path)
-        num_env_vars = len(self.input_cols) - len(self.output_cols)
-        results = np.empty((num_timesteps, starting_conds.shape[-1] - num_env_vars))
-        new_input = np.empty((1, starting_conds.shape[-1]))
-        static_input = starting_conds[:, -num_env_vars:]
-
-        for i in range(num_timesteps):
-
-            if i == 0:
-
-                pred = np.block(mod.predict(starting_conds))
-                transformed_pred = self.output_scaler.inverse_transform(pred)
-                results[i, :] = transformed_pred
-                new_input[:, -num_env_vars:] = static_input
-                new_input[:, :-num_env_vars] = pred
-                new_input[:, 3] = temps[i]
-
-            else:
-
-                pred = np.block(mod.predict(new_input))
-                transformed_pred = self.output_scaler.inverse_transform(pred)
-                results[i, :] = transformed_pred
-
-                if i < range(num_timesteps)[-1]:
-                    new_input[:, -num_env_vars:] = static_input
-                    new_input[:, :-num_env_vars] = pred
-                    new_input[:, 3] = temps[i]
-
-        results_df = pd.DataFrame(results)
-        results_df.columns = self.output_cols[1:-1]
-        results_df['Time [s]'] = time_series.values
-        results_df['id'] = exp
-        results_df = results_df.reindex(self.output_cols, axis=1)
-        results_df = inverse_log_transform(results_df, ['Precursor [ug/m3]'])
-
-        del mod
-        tf.keras.backend.clear_session()
-        gc.collect()
-
-        return results_df
-
-    @staticmethod
-    def get_starting_conds(data, exp, seq_len=1, starting_ts=0):
-        """
-        Retrieve initial conditions for given experiment.
-        Args:
-             data (DataFrame): Validation or testing DataFrame.
-             exp (str): Experiment label in form ('Exp####') without preceding zeros (ex. experiment 18 would be
-                    'Exp18' not 'Exp0018')
-            seq_len (int): Number of observations to use as initial conditions (> 1 for RNN/LSTM models) Defaults to 1.
-            starting_ts (int): First timestep to use for initial conditions.
-        Returns:
-            starting_conditions (Dataframe): Dataframe of obs to use as input for first prediction of box emulator.
-
-        """
-        starting_conditions = data[data['id'] == exp].iloc[starting_ts:starting_ts + seq_len, :]
-        return starting_conditions
-
-    def scale_input(self, input_concentrations, seq_length=1, starting_ts=0):
-        """
-        Scale initial conditions for initial prediction of box emulator.
-        Args:
-            input_concentrations (DataFrame): DataFrame of initial conditions.
-            seq_length (int): Number of obs to use as initial conditions (> 1 for RNN/LSTM models) Defaults to 1.
-            starting_ts (int): First timestep to use for initial conditions.
-        Returns:
-            scaled_input (numpy array): scaled input array ready for predition.
-            static_input (numpy array): scaled subset (env. conds) of input that remains static throughout emulation.
-        """
-        num_env_vars = len(self.input_cols) - len(self.output_cols)
-        scaled_input = self.input_scaler.transform(input_concentrations.iloc[starting_ts:seq_length, 1:-1])
-        static_input = scaled_input[:, -num_env_vars:]
-
-        return scaled_input, static_input
+        preds_df = pd.DataFrame(data=pred_array.reshape(-1, len(self.output_cols)),
+                                columns=self.output_cols, index=idx)
+        return preds_df
 
 
-class GeckoBoxEmulatorTS(object):
-    """
-    Forward running box emulator for the GECKO-A atmospheric chemistry model. Uses first timestep of an experiment
-    as the initial conditions for first prediction of neural network - uses that prediction as the new input for
-    another prediction, and so on, looping through the length of an experiment.
-
-    Attributes:
-          neural_net_path (str): Path to saved neural network.
-          output_scaler (str): Path to output scaler object used to train neural network.
-          seq_length (int): Sequence length used to train RNN/LSTM network.
-          input_cols (list): List of input variables.
-          output_cols (lsit): List of output variables.
+def rnn_box_train_one_epoch(model,
+                            optimizer,
+                            loss_fn,
+                            batch_size,
+                            in_array,
+                            out_col_idx,
+                            hidden_weight=1.0,
+                            loss_weights=[1.0, 1.0, 1.0],
+                            grad_clip=1.0):
+    """ Train an RNN model for one epoch given training data as input
+    Args:
+        model (torch.nn.Module)
+        optimizer (torch.nn.Module)
+        loss_fn (torch.nn.Module)
+        batch_size (int)
+        in_array (np.array)
+        out_col_idx (list)
+        hidden_weight (float)
+        loss_weights (list(float))
+        grad_clip (float)
+    Return:
+        train_loss (float)
+        model (torch.nn.Module)
+        optimizer (torch.nn.Module)
     """
 
-    def __init__(self, neural_net_path, output_scaler, seq_length, input_cols, output_cols, seed=8176):
+    # Set the model to training mode
+    model.train()
 
-        self.neural_net_path = neural_net_path
-        self.output_scaler = output_scaler
-        self.seq_length = seq_length
-        self.input_cols = input_cols
-        self.output_cols = output_cols
-        self.seed = seed
+    # Grab the device from the model
+    device = model._device()
 
-        return
+    # Move the weights to the device
+    loss_weights = torch.FloatTensor(loss_weights).to(device)
 
-    def run_ensemble(self, client, data, num_timesteps, exps='all'):
-        """
-        Run an ensemble of GECKO-A experiment emulations distributed over a cluster using dask distributed.
-        Args:
-            client: Dask distributed TCP client.
-            data (numpy array): Scaled Validation/testing data, split by experiment.
-            num_timesteps (int): Number of timesteps to run each emulation forward.
-            num_exps (int or 'all'): Number of experiments to run. Defaults to 'all' within data provided. If (int),
-                    choose experiments randomly from those available.
-        Returns:
-            results_df (DataFrame): A concatenated pandas DataFrame of emulation results.
-        """
-        np.random.seed(self.seed)
-        num_seq_ts = num_timesteps - self.seq_length + 1
+    # Prepare the training dataset.
+    num_timesteps = in_array.shape[1]
+    num_experiments = in_array.shape[0]
+    batches_per_epoch = int(np.ceil(num_experiments / batch_size))
+    batched_experiments = list(range(batches_per_epoch))
+    random.shuffle(batched_experiments)
 
-        if exps == 'all':
-            exps = data['id'].unique()
-        else:
-            exps = ['Exp' + str(i) for i in exps]
+    train_epoch_loss = []
+    for j in batched_experiments:
 
-        starting_conds, temps, initial_out_values = [], [], []
-        time_series = data[data['id'] == exps[0]].iloc[-num_seq_ts:, :]['Time [s]'].copy()
+        random_indices = list(range(in_array.shape[0]))
+        random_selection = random.sample(random_indices, batch_size)
+        _in_array = torch.from_numpy(in_array[random_selection]).to(device).float()
 
-        for x in exps:
-            data_sub = data[data['id'] == x].iloc[:, 1:-1].copy()
-            data_sub.columns = self.input_cols[1:-1]
-            sc = self.get_starting_conds_ts(data_sub)
-            temperature_ts = data_sub['temperature (K)'][self.seq_length:].values
-            starting_conds.append(sc)
-            temps.append(temperature_ts)
+        # Use initial condition @ t = 0 and get the first prediction
+        # Clear gradient
+        optimizer.zero_grad()
 
-        futures = client.map(self.predict_ts, starting_conds, [num_timesteps] * len(exps), temps,
-                             [time_series] * len(exps), exps)
-        results = client.gather(futures)
-        results_df = pd.concat(results)
-        results_df.columns = [str(x) for x in results_df.columns]
+        h0 = model.init_hidden(_in_array[:, 0, :])
+        pred, h0 = model(_in_array[:, 0, :], h0)
 
-        return results_df
+        # get loss for the predicted output
+        loss = loss_fn(_in_array[:, 1, out_col_idx], pred)
+        loss = (loss_weights * loss).mean()
 
-    def predict_ts(self, starting_conds, num_timesteps, temps, time_series, exp):
-        """ Run emulation of single experiment given initial conditions.
-        Args:
-            starting_conds (DataFrame): DataFrame of initial conditions.
-            num_timesteps (int): Length of time steps to run emulation.
-            temps (Pandas Series): Time series of diurnally varying temperatures for respective experiment.
-            time_series (Pandas Series): Pandas 'Time' column from experiment data.
-            exp (Pandas Series): Series of Experiment ID
+        # get gradients w.r.t to parameters
+        loss.backward()
+        train_epoch_loss.append(loss.item())
 
-        Returns:
-            results (DataFrame): Pandas dataframe of emulated values with time stamps.
-        """
-        num_env_vars = len(self.input_cols) - len(self.output_cols)
-        mod = load_model(self.neural_net_path)
-        ts = num_timesteps - self.seq_length + 1
-        results = np.empty((ts, starting_conds.shape[2] - num_env_vars))
-        new_input_single = np.empty((1, 1, starting_conds.shape[2]))
-        static_input = starting_conds[0, 0, -num_env_vars:]
+        # update parameters
+        torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+        optimizer.step()
 
-        for i in range(ts):
+        for i in range(1, num_timesteps - 1):
+            # Use the last prediction to get the next prediction
+            optimizer.zero_grad()
 
-            if i == 0:
+            # update the next input to the model
+            new_input = _in_array[:, i, :]
+            new_input[:, out_col_idx] = pred.detach()
 
-                pred = np.block(mod.predict(starting_conds))
-                transformed_pred = self.output_scaler.inverse_transform(pred)
-                results[i, :] = transformed_pred
-                new_input_single[:, :, -num_env_vars:] = static_input
-                new_input_single[:, :, :-num_env_vars] = pred
-                new_input_single[:, :, 3] = temps[i]
-                x = starting_conds[:, 1:, :]
-                new_input = np.concatenate([x, new_input_single], axis=1)
+            # predict hidden state
+            h0_pred = model.init_hidden(new_input.cpu())
+            # compute loss for the last hidden prediction
+            hidden_loss = loss_fn(h0.detach(), h0_pred).mean()
+            # predict next state with the GRU
+            pred, h0 = model(new_input, h0.detach())
 
-            else:
+            # get loss for the predicted output
+            loss = loss_fn(_in_array[:, i + 1, out_col_idx], pred)
+            loss = (loss_weights * loss).mean()
 
-                pred = np.block(mod.predict(new_input))
-                transformed_pred = self.output_scaler.inverse_transform(pred)
-                results[i, :] = transformed_pred
+            # combine losses
+            loss += hidden_weight * hidden_loss
 
-                if i < range(ts)[-1]:
-                    new_input_single[:, :, -num_env_vars:] = static_input
-                    new_input_single[:, :, :-num_env_vars] = pred
-                    new_input_single[:, :, 3] = temps[i]
-                    x = new_input[:, 1:, :]
-                    new_input = np.concatenate([x, new_input_single], axis=1)
+            # get gradients w.r.t to parameters
+            loss.backward()
+            train_epoch_loss.append(loss.item())
 
-        results_df = pd.DataFrame(results)
-        results_df.columns = self.output_cols[1:-1]
-        results_df['Time [s]'] = time_series.values
-        results_df['id'] = exp
-        results_df = results_df.reindex(self.output_cols, axis=1)
-        results_df = inverse_log_transform(results_df, ['Precursor [ug/m3]'])
+            # update parameters
+            torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+            optimizer.step()
 
-        del mod
-        tf.keras.backend.clear_session()
-        gc.collect()
+    train_loss = np.mean(train_epoch_loss)
 
-        return results_df
+    return train_loss, model, optimizer
 
-    def get_starting_conds_ts(self, data, starting_ts=0):
-        """ Get 3D starting conditions in the format accepted by an RNN/LSTM Model.
-        Args:
-            data (Pandas DataFrame): Input Dataframe of specific experiment
-            starting_ts (int): Timestep to pull initial conditions from
-        Return:
-            sc (numpy array): 3D array of sequenced data used for input into an RNN/LSTM model.
-        """
 
-        sc = np.zeros((1, self.seq_length, data.shape[1]))
-        for i in range(self.seq_length):
-            sc[0, i, :] = data.iloc[starting_ts + i, :].copy()
+def rnn_box_test(model,
+                 loss_fn,
+                 in_array,
+                 out_array,
+                 y_scaler,
+                 output_cols,
+                 out_col_idx,
+                 log_trans_cols,
+                 tendency_cols,
+                 stable_thresh=10,
+                 start_times=[0]):
+    """ Run an RNN model in inference mode data as input
+    Args:
+        model (torch.nn.Module)
+        loss_fn (torch.nn.Module)
+        in_array (np.array)
+        out_array (pd.DataFrame)
+        y_scaler (sklearn.preprocessing._data.Scaler)
+        output_cols (List[str])
+        out_col_idx (List[str])
+        log_trans_cols (List[str])
+        tendency_cols (List[str])
+        stable_thresh (float)
+        starting_times (List[int])
+    Return:
+        mean_step_loss (float)
+        mean_box_mae (float)
+        preds (pd.DataFrame)
+        truth (pd.DataFrame)
+    """
 
-        return sc
+    # Put the model into eval model
+    model.eval()
+
+    # Grab the device from the model
+    device = model._device()
+
+    # How many total timesteps in the data
+    num_timesteps = in_array.shape[1]
+
+    all_preds, all_truths, total_loss = [], [], []
+    for start_time in start_times:
+
+        val_loss = []
+        _in_array = torch.from_numpy(in_array).to(device).float()
+
+        with torch.no_grad():
+
+            # set up array for saving predicted results
+            pred_array = np.empty((in_array.shape[0], num_timesteps - start_time, len(out_col_idx)))
+
+            # use initial condition @ t = start_time and get the first prediction
+            h0 = model.init_hidden(_in_array[:, start_time, :])
+            pred, h0 = model(_in_array[:, start_time, :], h0)
+            pred_array[:, 0, :] = pred.cpu().numpy()
+            loss = loss_fn(_in_array[:, start_time + 1, out_col_idx], pred).item()
+            val_loss.append(loss)
+
+            # use the first prediction to get the next, and so on for num_timesteps
+            for k, i in enumerate(range(start_time + 1, num_timesteps)):
+                new_input = _in_array[:, i, :]
+                new_input[:, out_col_idx] = pred
+                pred, h0 = model(new_input, h0)
+                pred_array[:, k + 1, :] = pred.cpu().numpy()
+                if i < (num_timesteps - 1):
+                    loss = loss_fn(_in_array[:, i + 1, out_col_idx], pred).item()
+                    val_loss.append(loss)
+
+        # put results into pandas df, first select indices relevant to the start time
+        idx = out_array.index
+        start_time_units = sorted(list(set([x[0] for x in idx])))[start_time]
+        start_time_condition = [x[0] >= start_time_units for x in idx]
+        idx = out_array[start_time_condition].index
+
+        raw_box_preds = pd.DataFrame(
+            data=pred_array.reshape(-1, len(output_cols)),
+            columns=output_cols,
+            index=idx
+        )
+
+        # inverse transform 
+        truth, preds = inv_transform_preds(
+            raw_preds=raw_box_preds,
+            truth=out_array[start_time_condition],
+            y_scaler=y_scaler,
+            log_trans_cols=log_trans_cols,
+            tendency_cols=tendency_cols)
+
+        # Accumulate the results for each box simulation for different starting times
+        all_preds.append(preds)
+        all_truths.append(truth)
+
+        # Accumulate the step losses across different starting times
+        total_loss += val_loss
+
+    all_preds = pd.concat(all_preds)
+    all_truths = pd.concat(all_truths)
+    metrics = ensembled_metrics(y_true=all_truths,
+                                y_pred=all_preds,
+                                member=0,
+                                output_vars=output_cols,
+                                stability_thresh=stable_thresh)
+    mean_box_mae = metrics['mean_mae'].mean()
+    mean_step_loss = np.sum(total_loss)
+
+    return mean_step_loss, mean_box_mae, metrics, all_preds, all_truths

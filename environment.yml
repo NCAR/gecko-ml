@@ -3,8 +3,8 @@ name: gecko
 channels:
   - conda-forge
 dependencies:
-  - optuna
   - python=3.8
+  - optuna
   - numpy
   - seaborn
   - scipy
@@ -26,8 +26,12 @@ dependencies:
   - pip
   - s3fs
   - pyarrow
+  - flake8
   - pip:
     - tensorflow
     - torch
+    - captum
+    - shap
+    - pyDOE
     - keras-self-attention
     - .

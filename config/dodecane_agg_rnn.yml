@@ -1,0 +1,57 @@
+species: 'dodecane'
+dir_path: '/glade/p/cisl/aiml/gecko/partition_data/'
+# dir_path: 'AWS:ncar-aiml-data-commons/gecko/' #use prefix 'AWS:' if path is AWS bucket
+output_path: '/home/schreck/gecko_dodecane_rnn_agg_runs'
+aggregate_bins: True
+ensemble_members: 1 # set to 1 for a single run
+scaler_type: "StandardScaler"
+bin_prefix: ['Gas [ug/m3]', 'Aerosol [ug_m3]']
+box_val_exps: 'all'
+random_seed: 8886
+input_vars: [
+    'Precursor [ug/m3]',
+    'Gas [ug/m3]',
+    'Aerosol [ug_m3]',
+    'temperature (K)',
+    'solar zenith angle (degree)',
+    'pre-existing aerosols (ug/m3)',
+    'o3 (ppb)',
+    'nox (ppb)',
+    'oh (10^6 molec/cm3)']
+output_vars: [
+    'Precursor [ug/m3]',
+    'Gas [ug/m3]',
+    'Aerosol [ug_m3]']
+log_trans_cols: ['Precursor [ug/m3]']
+tendency_cols: []
+
+model_configurations:
+  RNN:
+    GRU_1:
+      hidden_size: 1253
+      n_layers: 1
+      lr: 5.275222716082847e-05
+      l2_weight: 4.1388564718687273e-08
+      rnn_dropout: 0.13703730863711167
+      hidden_weight: 0.9804309371465264
+      batch_size: 980
+      epochs: 250
+      verbose: True
+      lr_patience: 2
+      stopping_patience: 7
+      member: 0
+      precursor_weight: 0.5368563352947852
+      gas_weight: 0.9617303456641537
+      aero_weight: 0.9114555730045296
+      validation_starting_times: [0, 10, 50, 100, 200, 500, 1000]
+        
+pbs:
+  kernel: "ncar_pylib /glade/work/$USER/py37"
+  bash: ["module load ncarenv/1.3 gnu/8.3.0 openmpi/3.1.4 python/3.7.5 cuda cudnn"]
+  batch:
+    N: "dode-gru"
+    l: ["select=1:ncpus=8:ngpus=1:mem=128GB", "walltime=12:00:00", "gpu_type=v100"]
+    A: "NAML0001"
+    q: "casper"
+    o: "/home/schreck/gecko_dodecane_rnn_agg_runs/out"
+    e: "/home/schreck/gecko_dodecane_rnn_agg_runs/err"
